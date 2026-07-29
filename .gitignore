@@ -60,3 +60,6 @@ __pypackages__/
 # Temp files
 temp/
 tmp/
+
+# Internal review notes (not for public tree)
+REVIEW.md

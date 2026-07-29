@@ -2,17 +2,17 @@ mcp-mistral-queue
 
 [English](README_en.md)
 
-Mistral API の無料枠（1リクエスト/30秒）制限を安全に回避し、ローカル環境や複数プロセス・MCPクライアントからの呼び出しを自動調停する MCP (Model Context Protocol) サーバー兼 CLI ツールです。
-SQLite (WALモード) と非同期キューイングを活用し、API レート制限を遵守しながら順番にリクエストを処理します。
+Mistral API の無料枠（約 1 リクエスト/30 秒）向けに、ローカルや複数プロセス・MCP クライアントからの呼び出しを共有 SQLite キューで調停する MCP (Model Context Protocol) サーバー兼 CLI ツールです。
+WAL モードの SQLite と非同期キューで開始間隔を協調し、単一 in-flight で順番に処理します（ベストエフォートの交通整理であり、公式の SLA 保証ではありません）。
 
 主な特徴
- * 自動レート制限調停: 31 秒間隔を自動調整し、無料枠の 429 Too Many Requests エラーを防止。エラー発生時は指数バックオフで自動回復。
- * マルチプロセス&優先度制御: 複数プロセス・タスクからの同時呼び出しに対応。タスク優先度 (Priority) に基づいた割り込み処理・キューイングを実現。
- * 柔軟なモデル&メッセージ指定: mistral-small-latest のほか、mistral-large-latest や codestral-latest への動的切り替え、および会話履歴（messages 配列）の直接投入に対応。
- * ストリーミング&キャンセルハンドリング: レスポンスの逐次処理と、クライアント側からのキャンセル信号・タイムアウトの安全な検出。
- * セキュアな設計: 一時管理用 DB は OS のユーザー専用隠しフォルダ（パーミッション 0700）内に配置し、他ユーザーからの干渉・情報漏洩を遮断。
- * uv 完全対応: PEP 723 (Inline Script Metadata) に対応。依存関係の個別管理や venv の作成が不要。
- * Mistral Vibe 連携: MCP サーバー（`--mcp`）として Vibe / Claude Desktop 等に登録可能。CLI 直実行は `uv run` を使用。
+ * 自動レート制限調停: 共有の約 31 秒間隔で開始を協調し、429 時は共有バックオフ後にゲートを再通過。成功時は既定間隔へ復帰。
+ * マルチプロセス&優先度制御: 複数プロセス・タスクからの同時呼び出しに対応。優先度 (1–3) と単一 in-flight でキューを整理。
+ * 柔軟なモデル&メッセージ指定: mistral-small-latest のほか、mistral-large-latest や codestral-latest への切り替え、会話履歴（messages 配列）の投入に対応。
+ * ストリーミング&キャンセル: レスポンスの逐次処理と、クライアント側キャンセル（CancelledError）時の DB 状態更新。
+ * ローカル制御 DB: テンポラリ DB はユーザー専用ディレクトリ（パーミッション 0700）配下に配置。
+ * uv 対応: PEP 723 (Inline Script Metadata)。`uv run` で依存を解決。
+ * Mistral Vibe 連携: MCP サーバー（`--mcp`）として Vibe / Claude Desktop 等に登録可能。CLI 直実行は `uv run` を使用（`vibe mmq.py` では動かない）。
 
 前提条件
  * Python 3.10+
@@ -142,4 +142,4 @@ Vibe UI 経由の手動確認は [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) を参
 
 MIT License
 
-Copyright (c) 2026 kench
+Copyright (c) 2026 utenadev

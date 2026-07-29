@@ -2,18 +2,18 @@
 
 [日本語](README.md)
 
-An MCP (Model Context Protocol) server and CLI tool that coordinates local and multi-process / multi-client calls to the Mistral API so free-tier limits (~1 request / 30 seconds) are respected.
-It uses SQLite (WAL mode) and async queueing to process requests in order while staying within the API rate limit.
+An MCP (Model Context Protocol) server and CLI tool that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
+It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
 
 ## Features
 
- * **Automatic rate-limit coordination**: Enforces a shared ~31s interval to reduce free-tier `429 Too Many Requests` errors, with exponential backoff on rate-limit failures.
- * **Multi-process & priority control**: Supports concurrent callers from multiple processes/tasks. Task priority drives queue ordering and interrupt-style preemption of lower-priority work.
+ * **Automatic rate-limit coordination**: Shared ~31s start interval; on 429, shared backoff then re-enter the gate. Resets to the base interval on success.
+ * **Multi-process & priority control**: Multiple processes/tasks can enqueue work. Priority (1–3) plus single in-flight processing order the queue.
  * **Flexible model & message options**: Switch among `mistral-small-latest`, `mistral-large-latest`, `codestral-latest`, and pass full conversation history via a `messages` array.
- * **Streaming & cancel handling**: Streams response chunks and handles client cancel / timeout signals.
- * **Hardened local temp storage**: Control DB lives under a per-user directory with mode `0700` to limit cross-user interference and leakage.
- * **uv-friendly**: PEP 723 inline script metadata; no separate venv setup required for `uv run`.
- * **Mistral Vibe integration**: Register as an MCP server (`--mcp`) for Vibe / Claude Desktop / similar clients. For direct CLI use, prefer `uv run` (not `vibe mmq.py ...`).
+ * **Streaming & cancel handling**: Streams response chunks; on client cancel (`CancelledError`) updates task status in the DB.
+ * **Local control DB**: Temp DB under a per-user directory with mode `0700`.
+ * **uv-friendly**: PEP 723 inline script metadata; use `uv run` to resolve deps.
+ * **Mistral Vibe integration**: Register as an MCP server (`--mcp`) for Vibe / Claude Desktop / similar clients. Direct CLI use is `uv run` (not `vibe mmq.py ...`).
 
 ## Prerequisites
 
@@ -147,4 +147,4 @@ For a manual Vibe UI check, see [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
 
 MIT License
 
-Copyright (c) 2026 kench
+Copyright (c) 2026 utenadev
