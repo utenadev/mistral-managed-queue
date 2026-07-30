@@ -1,58 +1,64 @@
-mcp-mistral-queue
+# mcp-mistral-queue
 
-[English](README_en.md)
+[English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)
 
-Mistral API の無料枠（約 1 リクエスト/30 秒）向けに、ローカルや複数プロセス・MCP クライアントからの呼び出しを共有 SQLite キューで調停する MCP (Model Context Protocol) サーバー兼 CLI ツールです。
-WAL モードの SQLite と非同期キューで開始間隔を協調し、単一 in-flight で順番に処理します（ベストエフォートの交通整理であり、公式の SLA 保証ではありません）。
+An MCP (Model Context Protocol) server and CLI tool that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
+It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
 
-主な特徴
- * 自動レート制限調停: 共有の約 31 秒間隔で開始を協調し、429 時は共有バックオフ後にゲートを再通過。成功時は既定間隔へ復帰。
- * マルチプロセス&優先度制御: 複数プロセス・タスクからの同時呼び出しに対応。優先度 (1–3) と単一 in-flight でキューを整理。
- * 柔軟なモデル&メッセージ指定: mistral-small-latest のほか、mistral-large-latest や codestral-latest への切り替え、会話履歴（messages 配列）の投入に対応。
- * ストリーミング&キャンセル: レスポンスの逐次処理と、クライアント側キャンセル（CancelledError）時の DB 状態更新。
- * ローカル制御 DB: テンポラリ DB はユーザー専用ディレクトリ（パーミッション 0700）配下に配置。
- * uv 対応: PEP 723 (Inline Script Metadata)。`uv run` で依存を解決。
- * Mistral Vibe 連携: MCP サーバー（`--mcp`）として Vibe / Claude Desktop 等に登録可能。CLI 直実行は `uv run` を使用（`vibe mmq.py` では動かない）。
+## Features
 
-前提条件
+ * **Automatic rate-limit coordination**: Shared ~31s start interval; on 429, shared backoff then re-enter the gate. Resets to the base interval on success.
+ * **Multi-process & priority control**: Multiple processes/tasks can enqueue work. Priority (1–3) plus single in-flight processing order the queue.
+ * **Flexible model & message options**: Any Mistral chat model name (defaults to `mistral-small-latest`; e.g. `mistral-large-latest`, `codestral-latest`), plus full conversation history via a `messages` array.
+ * **Streaming & cancel handling**: Streams the Mistral API response internally (tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
+ * **Local control DB**: Temp DB under a per-user directory with mode `0700` (path overridable via `MMQ_TEMP_DB_PATH`).
+ * **uv-friendly**: PEP 723 inline script metadata; use `uv run` to resolve deps.
+ * **Mistral Vibe integration**: Register as an MCP server (`--mcp`) for Vibe / Claude Desktop / similar clients. Direct CLI use is `uv run` (not `vibe mmq.py ...`).
+
+## Prerequisites
+
  * Python 3.10+
- * uv がインストールされていること (0.1.0 以上を推奨)
- * Mistral API の API キー (MISTRAL_API_KEY)
+ * [uv](https://github.com/astral-sh/uv) installed (0.1.0+ recommended)
+ * A Mistral API key (`MISTRAL_API_KEY`)
 
 ```bash
 export MISTRAL_API_KEY="your-mistral-api-key"
 ```
 
-使い方
+## Usage
 
-1. CLI モード (直接実行)
+### 1. CLI mode (direct run)
 
-**スクリプト実行は `uv run` を使います。**  
-（`vibe` コマンドは Mistral Vibe の**エージェント CLI** であり、`vibe mmq.py "..."` のようには動きません。）
+**Run the script with `uv run`.**  
+The `vibe` command is Mistral Vibe’s **agent CLI**; `vibe mmq.py "..."` does **not** execute this script.
 
 ```bash
-# 基本実行 (デフォルトモデル: mistral-small-latest)
-uv run mmq.py "Pythonのリスト内包表記について短く解説して"
+# Basic run (default model: mistral-small-latest)
+uv run mmq.py "Explain Python list comprehensions briefly"
 
-# モデルを指定して実行 (例: mistral-large-latest, codestral-latest)
-uv run mmq.py -m mistral-large-latest "複雑なアルゴリズムの解説をお願い"
+# Choose a model (e.g. mistral-large-latest, codestral-latest)
+uv run mmq.py -m mistral-large-latest "Explain a complex algorithm"
 
-# システムプロンプトを指定
-uv run mmq.py -s "あなたは関西弁で話すAIです。" "今日の天気を教えて"
+# Custom system prompt
+uv run mmq.py -s "You are an AI that speaks casually." "How is the weather today?"
 
-# 優先度 (1: 高, 2: 通常, 3: 低) を指定して割り込み処理
-uv run mmq.py --priority 1 "緊急度が高い質問"
+# Priority (1: high, 2: normal, 3: low)
+uv run mmq.py --priority 1 "Urgent question"
 
-# 対話コンテキスト (messages 配列) を直接渡す
-uv run mmq.py --messages '[{"role":"system","content":"厳格なプログラマー"},{"role":"user","content":"Rustの所有権とは？"}]'
+# Full conversation context as a messages JSON array
+uv run mmq.py --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
 ```
 
-2. MCP サーバーモード (Mistral Vibe / 他クライアント連携)
+### 2. MCP server mode (Mistral Vibe / other clients)
 
-Vibe、Claude Desktop、OpenCode、Goose などから **MCP ツール `ask_mistral`** として呼びます。  
-CLI の `uv run mmq.py "..."` とは別経路です。
+Expose the **`ask_mistral`** tool to Vibe, Claude Desktop, OpenCode, Goose, and similar clients.  
+This is a separate path from CLI `uv run mmq.py "..."`.
 
-**Vibe 設定例**（詳細は [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md)）:
+Use an **absolute path** to this repo’s `mmq.py` (package is not on PyPI yet).  
+`uv run` resolves the PEP 723 deps; see [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
+
+**Vibe / Claude Desktop example** (`claude_desktop_config.json` or equivalent):
+
 ```json
 {
   "mcpServers": {
@@ -74,71 +80,56 @@ CLI の `uv run mmq.py "..."` とは別経路です。
 }
 ```
 
-設定後、Vibe を再起動し、エージェントに tool `ask_mistral` を使わせます（モデルは tool 引数 `model` で指定、例: `mistral-large-latest`）。
+After changing config, restart the client and have the agent use the `ask_mistral` tool (pass `model` when needed, e.g. `mistral-large-latest`).
 
-**Claude Desktop 設定例 (claude_desktop_config.json):**
-```json
-{
-  "mcpServers": {
-    "mistral-queue": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with", "mcp[cli]>=1.0.0,<2",
-        "--with", "mistralai>=1.0.0,<2",
-        "--no-project",
-        "/absolute/path/to/mmq.py",
-        "--mcp"
-      ],
-      "env": {
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
+> **After a PyPI release:** `uvx` / published install may replace the path form. The console script is `mmq` (see `pyproject.toml`), not `mcp-mistral-queue`. Track that in [docs/tasks.md](docs/tasks.md).
 
-MCP ツール仕様 (ask_mistral)
+### MCP tools
 
-MCP サーバーモード起動時、クライアント側からは ask_mistral ツールとしてアクセスできます。
+When the server is running, clients can use the following tools:
 
-| 引数名 | 型 | デフォルト値 | 説明 |
+#### `ask_mistral`
+
+| Argument | Type | Default | Description |
 |---|---|---|---|
-| prompt | string | null | 単発の入力プロンプトテキスト |
-| messages | array | null | 会話履歴オブジェクトの配列 ([{"role": "...", "content": "..."}]) |
-| model | string | "mistral-small-latest" | 利用する Mistral モデル名 |
-| system_prompt | string | null | カスタムシステムプロンプト (prompt 指定時のみ有効) |
-| priority | number | 2 | タスク優先度 (1: 高, 2: 通常, 3: 低) |
+| prompt | string | null | Single-shot user prompt text |
+| messages | array | null | Conversation history (`[{"role": "...", "content": "..."}]`) |
+| model | string | `"mistral-small-latest"` | Mistral model name |
+| system_prompt | string | null | Custom system prompt (only when using `prompt`) |
+| priority | number | 2 | Task priority (1: high, 2: normal, 3: low) |
 
-管理データの保存先
+## Control data location
 
-排他制御用のテンポラリ DB は、ユーザーごとにパーミッション 0700 で作成された専用ディレクトリに保存されます。
- * キュー管理 DB: /tmp/mcp_mistral_queue_<USER>/mcp_mistral_flow_control.db
+The coordination temp DB is stored in a per-user directory created with mode `0700`:
 
-テスト
+ * Default: `<tempdir>/mcp_mistral_queue_<USER>/mcp_mistral_flow_control.db`  
+   (`tempfile.gettempdir()`, often `/tmp` on Linux)
+ * Override: set `MMQ_TEMP_DB_PATH` to a full file path (parent dir is created with `0700`)
+
+## Tests
 
 ```bash
-# 単体 + e2e（Fake API、ネットワーク不要）
+# Unit + e2e (fake API; no network required)
 uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
   --with pytest --with pytest-asyncio --no-project \
   python -m pytest tests/ -v -m "not live"
 
-# e2e のみ
+# e2e only
 uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
   --with pytest --with pytest-asyncio --no-project \
   python -m pytest tests/e2e -v -m "not live"
 
-# 本物 API（任意・無料枠を消費）
+# Live API (optional; consumes free-tier quota)
 export MISTRAL_API_KEY=...
 uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
   --with pytest --with pytest-asyncio --no-project \
   python -m pytest tests/e2e/test_live_api.py -v -m live
 ```
 
-e2e は `MMQ_FAKE_API=1` と短い `MMQ_BASE_WAIT_TIME` でプロセス境界（CLI / MCP stdio）を検証します。
-Vibe UI 経由の手動確認は [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) を参照してください。
+e2e uses `MMQ_FAKE_API=1` and a short `MMQ_BASE_WAIT_TIME` to exercise process boundaries (CLI / MCP stdio).
+For a manual Vibe UI check, see [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
 
-ライセンス
+## License
 
 MIT License
 

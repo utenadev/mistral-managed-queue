@@ -27,9 +27,13 @@ except Exception:
     _ensure_module("mcp.server.fastmcp")
 
 try:
-    import mistralai  # noqa: F401
+    from mistralai.client import Mistral  # noqa: F401
 except Exception:
     _ensure_module("mistralai")
+    _ensure_module("mistralai.client")
+    # Add Mistral class to mistralai.client for mmq.py import
+    import mistralai
+    mistralai.client.Mistral = MagicMock()
 
 from mmq import (
     BASE_WAIT_TIME,

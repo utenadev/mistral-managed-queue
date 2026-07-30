@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
-from mistralai import Mistral
+from mistralai.client import Mistral
 
 # === Constant Configuration (env overrides for tests / local tuning) ===
 
