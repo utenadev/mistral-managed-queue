@@ -59,10 +59,8 @@ uv run mmq.py --purge-id 42    # annuler une tâche par ID
 Exposez l'outil **`ask_mistral`** à Vibe, Claude Desktop, OpenCode, Goose et clients similaires.
 Ceci est un chemin distinct du CLI `uv run mmq.py "..."`.
 
-Utilisez un **chemin absolu** vers le fichier `mmq.py` de ce dépôt (le package n'est pas encore sur PyPI).
-`uv run` résout les dépendances PEP 723 ; voir [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
-
-**Exemple pour Vibe / Claude Desktop** (`claude_desktop_config.json` ou équivalent) :
+**Depuis une copie locale** (fonctionne dès maintenant ; `uv run` résout les deps PEP 723).  
+Voir [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
 
 ```json
 {
@@ -85,9 +83,30 @@ Utilisez un **chemin absolu** vers le fichier `mmq.py` de ce dépôt (le package
 }
 ```
 
-Après avoir modifié la configuration, redémarrez le client et faites utiliser l'outil `ask_mistral` par l'agent (passez `model` si nécessaire, par exemple `mistral-large-latest`).
+**Après installation depuis PyPI** (le script console est `mmq`, pas le nom du package) :
 
-> **Après une publication PyPI :** `uvx` / l'installation publiée peut remplacer la forme par chemin. Le script console est `mmq` (voir `pyproject.toml`), et non `mcp-mistral-queue`. Suivi dans [docs/tasks.md](docs/tasks.md).
+```bash
+uvx --from mcp-mistral-queue mmq --mcp
+# ou : pip install mcp-mistral-queue && mmq --mcp
+```
+
+```json
+{
+  "mcpServers": {
+    "mistral-queue": {
+      "command": "uvx",
+      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
+      "env": {
+        "MISTRAL_API_KEY": "your-mistral-api-key"
+      }
+    }
+  }
+}
+```
+
+> **Note :** `uv build` produit des artefacts dans `dist/`. L'upload PyPI nécessite un jeton (`uv publish`). Tant que le package n'est pas sur l'index, utilisez la config par chemin.
+
+Après modification de la config, redémarrez le client et faites utiliser les outils (`ask_mistral`, `get_queue_status`).
 
 ### Outils MCP
 

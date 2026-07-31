@@ -20,6 +20,10 @@
 | ✅ 完了 | ソース英語化（docstring / argparse / 例外） | P1 | 1h |
 | ✅ 完了 | README 多言語構成（en / ja / fr） | P1 | 2h |
 | ✅ 完了 | README 実装整合（path 主導・overclaim 除去） | P1 | 1h |
+| ✅ 完了 | B: 小粒クリーンアップ（LICENSE / both-args / `__all__` / to_thread） | P1 | 1h |
+| ✅ 完了 | A: `get_queue_status` + テスト + 三言語 README | P1 | 2h |
+| ✅ 完了 | C: `--purge` / `--purge-all` / `--purge-id` | P1 | 1.5h |
+| ⏳ | D: PyPI 公開（build 済み・publish はトークン待ち） | P1 | 0.5h |
 
 ---
 
@@ -31,6 +35,7 @@
 |------|-------|------|------|------|
 | ⏳ | uv 最小バージョンを必須に | 前提条件を明確化（README / pyproject） | 0.2h | - |
 | ✅ | `export` / コードブロック整形 | 現行 README は fenced block で問題なし | 0.5h | - |
+| ⏳ | PyPI へ `uv publish` | `uv build` 成功済み。`UV_PUBLISH_TOKEN` 等を設定して publish | 0.5h | 認証情報 |
 
 ### 中優先度 (P2)
 
@@ -42,13 +47,13 @@
 | ⏳ | 非同期 DB 接続 (aiosqlite) | DB 操作を非同期化 | 2h | - |
 | ✅ | 429 エラーのリトライ前に待機 | P0 で実装済み（共有バックオフ → ゲート再通過） | 1h | - |
 | ⏳ | Progress total の動的化 | ストリームの総数を動的に | 1h | - |
-| ⏳ | DB 操作を全て `asyncio.to_thread` に | `init_db` / `clean_zombie_tasks` はまだ同期直呼び | 1h | - |
+| ✅ | DB 操作を全て `asyncio.to_thread` に | async 経路から `init_db` / `clean_zombie` を offload 済み | 1h | - |
 | ⏳ | HTTP ステータスコード優先判定 | エラーチェックを強化 | 0.5h | - |
 | ✅ | pyproject.toml build 設定修正 | hatch wheel/sdist + `mmq` script 済み | 0.5h | - |
-| ⏳ | 両方指定時エラー | `prompt` と `messages` 同時指定を防ぐ | 0.5h | - |
+| ✅ | 両方指定時エラー | `prompt` と `messages` 同時指定を拒否 | 0.5h | - |
 | ⏳ | status/priority インデックス | DB パフォーマンス向上 | 1h | - |
 | ⏳ | 構造化エラー返却 | エラー情報を充実 | 1h | - |
-| ⏳ | LICENSE 末尾改行 | 現状末尾改行なし | 0.1h | - |
+| ✅ | LICENSE 末尾改行 | 末尾改行を追加済み | 0.1h | - |
 
 ---
 
@@ -58,10 +63,10 @@
 
 _nanobot や API サーバーから Python モジュールとしてインポートしやすくするための整備_
 
-- [ ] **`__all__` による公開 API の明示 (`mmq.py`)**
+- [x] **`__all__` による公開 API の明示 (`mmq.py`)**
 
   ```python
-  __all__ = ["MistralRequest", "execute_mistral_queue_async", "ask_mistral"]
+  __all__ = ["MistralRequest", "execute_mistral_queue_async", "ask_mistral", "get_queue_status"]
   ```
 
 - [ ] **設定パラメータのコード側オーバーライド対応**
@@ -72,65 +77,27 @@ _nanobot や API サーバーから Python モジュールとしてインポー�
 
 _絶対パス指定や Git URL 指定をなくし、`uvx`・`pip` 一発で使えるようにする_
 
-- [ ] **PyPI への公開 (`uv build` → `uv publish`)**
+- [x] **`uv build` 成功** (`dist/mcp_mistral_queue-0.1.0-*.whl` / sdist; entry point `mmq`)
+- [ ] **PyPI への公開 (`uv publish`)** — 認証情報が必要
 
-  - **MCP 設定の簡略化:** 公開後は README 主導線を `uvx` / インストール済み `mmq --mcp` に切替可能（entry point は **`mmq`**。パッケージ名 `mcp-mistral-queue` と混同しない）
-
-  - **他プロジェクト依存の簡略化:** `pyproject.toml` に `"mcp-mistral-queue"` と書くだけで連携可能に
-
-  - **CLI 実行:** どこからでも `mmq` コマンドで単発実行できるように整備
-
-  - **公開前:** path ベース `uv run …/mmq.py --mcp` を主導線のまま（現状 README en/ja/fr 準拠）
+  - 手順: `UV_PUBLISH_TOKEN=pypi-... uv publish`（または Trusted Publisher）
+  - **MCP 設定:** `uvx --from mcp-mistral-queue mmq --mcp`（README に path 形と併記済み）
+  - **CLI:** `mmq "..."` / `uvx --from mcp-mistral-queue mmq "..."`
+  - 公開後: README の「Note: until on the index」を削除してよいか確認
 
 ### 3. `--purge` コマンド（緊急ブレーキ機能）
 
 _AI Agent の誤作動や大量連投をリセットするための JOB 強制取り消し_
 
-- [ ] **`--purge` オプションの追加**
-
-  - `pending` 状態のタスクを一括で `cancelled` にする処理を実装する。
-
-  ```sql
-  UPDATE tasks SET status = 'cancelled' WHERE status = 'pending';
-  ```
-
-- [ ] **`--purge-all` オプションの追加**
-
-  - `pending` + `processing` 状態のタスクを全削除
-
-  ```sql
-  UPDATE tasks SET status = 'cancelled' WHERE status IN ('pending', 'processing');
-  ```
-
-- [ ] **タスクID指定**: `purge <task_id>` で特定タスクを削除
-
-  ```sql
-  UPDATE tasks SET status = 'cancelled' WHERE id = ?;
-  ```
+- [x] **`--purge` オプションの追加** — pending → cancelled
+- [x] **`--purge-all` オプションの追加** — pending + processing → cancelled
+- [x] **`--purge-id ID`** — 指定タスクを cancelled
 
 ### 4. 機能追加・デフォルト設定の変更
 
-- [ ] **`get_queue_status` MCPツールの実装**
+- [x] **`get_queue_status` MCPツールの実装**
 
-  - 待ち件数や次回実行スロットまでの秒数などを親エージェントに返すステータス確認ツールを追加。
-
-  - レスポンス構造イメージ:
-
-    ```json
-    {
-      "pending": 2,
-      "processing": 1,
-      "seconds_until_next_slot": 18.4,
-      "current_wait_interval": 31.0,
-      "in_flight": true
-    }
-    ```
-
-  - **受け入れ条件（必須）:**
-    - unit テスト（待ち件数・次スロット秒数・空キュー等のエッジ）
-    - MCP e2e（`list_tools` に載る / call のレスポンス形）
-    - README への記載は **実装＋テスト完了後**。en / ja / fr を同時更新する
-    - **未実装のまま README に載せない**（公開面の overclaim 禁止）
+  - unit + MCP e2e + en/ja/fr README 反映済み
 
 - [ ] **デフォルトモデルの更新**
 
@@ -149,29 +116,16 @@ _AI Agent の誤作動や大量連投をリセットするための JOB 強制�
   - [x] `argparse` の `help` および `epilog`
   - [x] 例外メッセージ (`ValueError` など)
 
-  _注: 作業ツリー上 `mmq.py` に反映済み。未コミットなら commit 対象。_
+  _コミット済み。_
 
 ### 6. ドキュメントの再構成・多言語対応
 
 - [x] **README ファイル構成の変更**
-
-  - [x] メイン `README.md` を英語化
-  - [x] 日本語を `README.ja.md` に
-  - [x] フランス語 `README.fr.md` を追加
-  - [x] 先頭に相互リンク
-
 - [x] **README 記載内容の実装整合（公開前）**
-
-  - [x] path ベース `uv run …/mmq.py --mcp` を主導線に
-  - [x] 未実装 `get_queue_status` を README に載せない
-  - [x] default model 表記をコードと一致（`mistral-small-latest`）
-  - [x] DB パスを `tempfile.gettempdir()` + `MMQ_TEMP_DB_PATH` に合わせて記載
-
-- [ ] **README 記載内容の更新（機能・公開とセット）**
-
-  - [ ] デフォルトモデルを `mistral-medium-3-5` に修正（§4 コード変更と同時）
-  - [ ] `uvx` / 公開後の起動例（entry point `mmq`）を PyPI 公開後に
-  - [ ] ツール一覧に `get_queue_status`（§4 実装＋テスト完了後）
+- [x] **ツール一覧に `get_queue_status`**
+- [x] **`uvx --from mcp-mistral-queue mmq --mcp` 形を README に併記**（インデックス未公開の注記付き）
+- [ ] **デフォルトモデルを `mistral-medium-3-5` に修正**（コード変更と同時）
+- [ ] **PyPI 公開後:** 「until on the index」注記を削除し、必要なら uvx 形を主導線に
 
 ---
 
@@ -186,20 +140,25 @@ docs/
 
 ---
 
-## 🧭 次にやること候補（議論用）
+## 🧭 実行プラン進捗
 
-公開前のドキュメント/英語化は一通り揃った。残りは「機能」「運用」「公開」のどれを取るか。
+| ステップ | 状況 |
+|----------|------|
+| commit（英語化 + tasks） | ✅ |
+| B クリーンアップ | ✅ |
+| A `get_queue_status` | ✅ |
+| C `--purge*` | ✅ |
+| D PyPI | ⏳ `uv build` 成功。`uv publish` は **トークン未設定のため未実行** |
 
-| 優先候補 | 内容 | 理由 |
-|----------|------|------|
-| **A. `get_queue_status`** | MCP ツール + unit/e2e + 三言語 README | エージェントが待ち時間を判断できる。受け入れ条件は既に明文化済み |
-| **B. 小粒クリーンアップ** | LICENSE 末尾改行 / `prompt`+`messages` 同時指定エラー / `__all__` / `init_db` の `to_thread` | 30分〜2h。公開前の体裁と API 明確化 |
-| **C. `--purge`** | pending / all / id 取り消し | 誤爆連投時の緊急ブレーキ。CLI 運用向け |
-| **D. PyPI 公開** | `uv build` → publish → README を `mmq`/`uvx` 主導に切替 | インストール摩擦を下げる。entry point 名に注意 |
-| **E. デフォルトモデル変更** | `mistral-medium-3-5` へ（コード+テスト+README 同時） | 製品判断。無料枠・品質のトレードオフ確認が先 |
+**残り D の手順:**
 
-**おすすめの並び（案）:** 未コミット `mmq.py` 英語化を commit → **B（10分）** → **A（本丸）** → 必要なら C → 準備できたら D。  
-E は A と独立だが「README をまた触る」ので A の README 更新と同じ PR に載せるか、別 PR で明示する。
+```bash
+export UV_PUBLISH_TOKEN=pypi-...   # or use keyring / trusted publishing
+uv build
+uv publish
+```
+
+公開後: README の「until on the index」注記を落とす。
 
 ---
 
