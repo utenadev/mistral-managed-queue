@@ -104,8 +104,6 @@ uvx --from mcp-mistral-queue mmq --mcp
 }
 ```
 
-> **注意:** ローカルでは `uv build` で `dist/` を生成できます。PyPI へのアップロードにはトークン（`uv publish`）が必要です。インデックス未公開の間は path ベース設定を使ってください。
-
 設定後、クライアントを再起動し、エージェントに tools（`ask_mistral` / `get_queue_status`）を使わせます。
 
 ### MCP ツール

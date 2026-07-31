@@ -105,8 +105,6 @@ uvx --from mcp-mistral-queue mmq --mcp
 }
 ```
 
-> **Note:** A local `uv build` produces `dist/` artifacts; uploading to PyPI requires a token (`uv publish`). Until the package is on the index, use the path-based config above.
-
 After changing config, restart the client and have the agent use the tools (`ask_mistral`, `get_queue_status`; pass `model` when needed).
 
 ### MCP tools

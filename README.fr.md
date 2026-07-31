@@ -104,8 +104,6 @@ uvx --from mcp-mistral-queue mmq --mcp
 }
 ```
 
-> **Note :** `uv build` produit des artefacts dans `dist/`. L'upload PyPI nécessite un jeton (`uv publish`). Tant que le package n'est pas sur l'index, utilisez la config par chemin.
-
 Après modification de la config, redémarrez le client et faites utiliser les outils (`ask_mistral`, `get_queue_status`).
 
 ### Outils MCP

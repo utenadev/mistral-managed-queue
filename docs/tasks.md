@@ -23,7 +23,7 @@
 | ✅ 完了 | B: 小粒クリーンアップ（LICENSE / both-args / `__all__` / to_thread） | P1 | 1h |
 | ✅ 完了 | A: `get_queue_status` + テスト + 三言語 README | P1 | 2h |
 | ✅ 完了 | C: `--purge` / `--purge-all` / `--purge-id` | P1 | 1.5h |
-| ⏳ | D: PyPI 公開（build 済み・publish はトークン待ち） | P1 | 0.5h |
+| ✅ 完了 | D: PyPI 公開 (`mcp-mistral-queue` 0.1.0) | P1 | 0.5h |
 
 ---
 
@@ -35,8 +35,7 @@
 |------|-------|------|------|------|
 | ⏳ | uv 最小バージョンを必須に | 前提条件を明確化（README / pyproject） | 0.2h | - |
 | ✅ | `export` / コードブロック整形 | 現行 README は fenced block で問題なし | 0.5h | - |
-| ⏳ | PyPI へ `uv publish` | `uv build` 成功済み。`UV_PUBLISH_TOKEN` 等を設定して publish | 0.5h | 認証情報 |
-
+| ✅ | PyPI へ `uv publish` | `mcp-mistral-queue==0.1.0` 公開済み | 0.5h | - |
 ### 中優先度 (P2)
 
 | 状況 | タスク | 説明 | 見積 | 依存 |
@@ -78,12 +77,11 @@ _nanobot や API サーバーから Python モジュールとしてインポー�
 _絶対パス指定や Git URL 指定をなくし、`uvx`・`pip` 一発で使えるようにする_
 
 - [x] **`uv build` 成功** (`dist/mcp_mistral_queue-0.1.0-*.whl` / sdist; entry point `mmq`)
-- [ ] **PyPI への公開 (`uv publish`)** — 認証情報が必要
+- [x] **PyPI への公開 (`uv publish`)** — `mcp-mistral-queue==0.1.0`  
+  https://pypi.org/project/mcp-mistral-queue/
 
-  - 手順: `UV_PUBLISH_TOKEN=pypi-... uv publish`（または Trusted Publisher）
-  - **MCP 設定:** `uvx --from mcp-mistral-queue mmq --mcp`（README に path 形と併記済み）
+  - **MCP 設定:** `uvx --from mcp-mistral-queue mmq --mcp`（README に path 形と併記）
   - **CLI:** `mmq "..."` / `uvx --from mcp-mistral-queue mmq "..."`
-  - 公開後: README の「Note: until on the index」を削除してよいか確認
 
 ### 3. `--purge` コマンド（緊急ブレーキ機能）
 
@@ -125,7 +123,7 @@ _AI Agent の誤作動や大量連投をリセットするための JOB 強制�
 - [x] **ツール一覧に `get_queue_status`**
 - [x] **`uvx --from mcp-mistral-queue mmq --mcp` 形を README に併記**（インデックス未公開の注記付き）
 - [ ] **デフォルトモデルを `mistral-medium-3-5` に修正**（コード変更と同時）
-- [ ] **PyPI 公開後:** 「until on the index」注記を削除し、必要なら uvx 形を主導線に
+- [x] **PyPI 公開後:** 「until on the index」注記を削除
 
 ---
 
@@ -148,17 +146,7 @@ docs/
 | B クリーンアップ | ✅ |
 | A `get_queue_status` | ✅ |
 | C `--purge*` | ✅ |
-| D PyPI | ⏳ `uv build` 成功。`uv publish` は **トークン未設定のため未実行** |
-
-**残り D の手順:**
-
-```bash
-export UV_PUBLISH_TOKEN=pypi-...   # or use keyring / trusted publishing
-uv build
-uv publish
-```
-
-公開後: README の「until on the index」注記を落とす。
+| D PyPI | ✅ `mcp-mistral-queue==0.1.0` 公開 |
 
 ---
 
