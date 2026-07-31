@@ -71,7 +71,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-mistral-queue")
 
-__all__ = ["MistralRequest", "execute_mistral_queue_async", "ask_mistral"]
+__all__ = [
+    "MistralRequest",
+    "execute_mistral_queue_async",
+    "ask_mistral",
+    "get_queue_status",
+]
 
 
 @dataclass
@@ -644,6 +649,42 @@ async def execute_mistral_queue_async(
         raise
 
 
+def read_queue_status() -> Dict[str, Any]:
+    """Snapshot of queue and shared rate-limit state (read-only).
+
+    Ensures the DB schema exists, then returns:
+      pending, processing, seconds_until_next_slot, current_wait_interval, in_flight
+    """
+    init_db()
+    now = time.time()
+    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_SHORT_TIMEOUT) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM tasks WHERE status = 'pending'"
+        )
+        pending = int(cursor.fetchone()[0])
+        cursor.execute(
+            "SELECT COUNT(*) FROM tasks WHERE status = 'processing'"
+        )
+        processing = int(cursor.fetchone()[0])
+        cursor.execute(
+            "SELECT last_executed_at, current_wait_time FROM api_log WHERE id = 1"
+        )
+        row = cursor.fetchone()
+        last_exec = float(row[0]) if row else 0.0
+        wait_time = float(row[1]) if row else BASE_WAIT_TIME
+
+    elapsed = now - last_exec
+    seconds_until = max(0.0, wait_time - elapsed)
+    return {
+        "pending": pending,
+        "processing": processing,
+        "seconds_until_next_slot": round(seconds_until, 3),
+        "current_wait_interval": wait_time,
+        "in_flight": processing > 0,
+    }
+
+
 # MCP Tool Registration
 @mcp.tool()
 async def ask_mistral(
@@ -676,6 +717,21 @@ async def ask_mistral(
         priority=priority,
     )
     return await execute_mistral_queue_async(req, ctx)
+
+
+@mcp.tool()
+async def get_queue_status() -> str:
+    """Return current shared queue and rate-limit status as JSON.
+
+    Fields:
+        pending: tasks waiting in the queue
+        processing: tasks currently claimed / running
+        seconds_until_next_slot: seconds until the shared API gate opens
+        current_wait_interval: active shared wait interval in seconds
+        in_flight: whether any task is currently processing
+    """
+    status = await asyncio.to_thread(read_queue_status)
+    return json.dumps(status)
 
 
 def parse_messages_json(messages_str: Optional[str]) -> Optional[List[Dict[str, Any]]]:

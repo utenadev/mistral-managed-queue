@@ -51,6 +51,7 @@ from mmq import (
     get_secure_temp_db_path,
     init_db,
     is_rate_limit_error,
+    read_queue_status,
     register_task,
     touch_task,
     update_rate_limit_wait_time,
@@ -161,6 +162,7 @@ class TestMistralRequest:
             "MistralRequest",
             "execute_mistral_queue_async",
             "ask_mistral",
+            "get_queue_status",
         }
 
 
@@ -381,6 +383,52 @@ class TestTaskManagement:
             cursor.execute("SELECT updated_at FROM tasks WHERE id = ?", (task_id,))
             updated = cursor.fetchone()[0]
         assert updated > 1.0
+
+
+# =============================================================================
+# Test queue status snapshot
+# =============================================================================
+
+class TestQueueStatus:
+    """Tests for read_queue_status (get_queue_status data path)."""
+
+    def test_empty_queue_status(self, initialized_db):
+        """Empty DB: zero pending/processing, slot available if last_exec is old."""
+        status = read_queue_status()
+        assert status["pending"] == 0
+        assert status["processing"] == 0
+        assert status["in_flight"] is False
+        assert status["current_wait_interval"] == BASE_WAIT_TIME
+        assert status["seconds_until_next_slot"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_counts_pending_and_processing(self, initialized_db):
+        """pending / processing / in_flight reflect task rows."""
+        p1 = await register_task(MistralRequest(prompt="p1"))
+        p2 = await register_task(MistralRequest(prompt="p2"))
+        await update_task_status(p1, "processing")
+
+        status = read_queue_status()
+        assert status["pending"] == 1
+        assert status["processing"] == 1
+        assert status["in_flight"] is True
+        # p2 still pending; keep lint quiet
+        assert p2 > 0
+
+    def test_seconds_until_next_slot_when_gated(self, initialized_db):
+        """Recent last_executed_at yields positive seconds_until_next_slot."""
+        now = time.time()
+        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE api_log SET last_executed_at = ?, current_wait_time = ? WHERE id = 1",
+                (now, 31.0),
+            )
+            conn.commit()
+
+        status = read_queue_status()
+        assert status["current_wait_interval"] == 31.0
+        assert 25.0 <= status["seconds_until_next_slot"] <= 31.0
 
 
 # =============================================================================

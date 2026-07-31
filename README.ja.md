@@ -98,6 +98,18 @@ CLI の `uv run mmq.py "..."` とは別経路です。
 | system_prompt | string | null | カスタムシステムプロンプト（`prompt` 指定時のみ有効） |
 | priority | number | 2 | タスク優先度（1: 高, 2: 通常, 3: 低） |
 
+#### `get_queue_status`
+
+共有キュー / レート制限の状態を JSON で返します:
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| pending | number | キュー待ちタスク数 |
+| processing | number | 実行中（claim 済み）タスク数 |
+| seconds_until_next_slot | number | 次の API スロットまでの秒数 |
+| current_wait_interval | number | 現在の共有待機間隔（秒） |
+| in_flight | boolean | 実行中タスクがあるか |
+
 ## 管理データの保存先
 
 排他制御用のテンポラリ DB は、ユーザーごとにパーミッション `0700` で作成された専用ディレクトリに保存されます。

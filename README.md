@@ -98,6 +98,18 @@ When the server is running, clients can use the following tools:
 | system_prompt | string | null | Custom system prompt (only when using `prompt`) |
 | priority | number | 2 | Task priority (1: high, 2: normal, 3: low) |
 
+#### `get_queue_status`
+
+Returns current shared queue / rate-limit status as JSON:
+
+| Field | Type | Description |
+|---|---|---|
+| pending | number | Tasks waiting in the queue |
+| processing | number | Tasks currently claimed / running |
+| seconds_until_next_slot | number | Seconds until the shared API gate opens |
+| current_wait_interval | number | Active shared wait interval (seconds) |
+| in_flight | boolean | Whether any task is currently processing |
+
 ## Control data location
 
 The coordination temp DB is stored in a per-user directory created with mode `0700`:

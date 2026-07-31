@@ -98,6 +98,18 @@ Lorsque le serveur est en cours d'exécution, les clients peuvent utiliser les o
 | system_prompt | string | null | Invite système personnalisée (uniquement lors de l'utilisation de `prompt`) |
 | priority | number | 2 | Priorité de la tâche (1 : haute, 2 : normale, 3 : basse) |
 
+#### `get_queue_status`
+
+Retourne l'état actuel de la file partagée / limite de débit en JSON :
+
+| Champ | Type | Description |
+|---|---|---|
+| pending | number | Tâches en attente dans la file |
+| processing | number | Tâches actuellement réservées / en cours |
+| seconds_until_next_slot | number | Secondes avant l'ouverture du créneau API partagé |
+| current_wait_interval | number | Intervalle d'attente partagé actif (secondes) |
+| in_flight | boolean | Indique si une tâche est en cours de traitement |
+
 ## Emplacement des données de contrôle
 
 La base de données temporaire de coordination est stockée dans un répertoire par utilisateur créé avec le mode `0700` :
