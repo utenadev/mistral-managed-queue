@@ -74,7 +74,7 @@ logger = logging.getLogger("mcp-mistral-queue")
 
 @dataclass
 class MistralRequest:
-    """Mistralリクエストのパラメータをカプセル化したデータクラス"""
+    """Parameters for a single Mistral API request."""
 
     prompt: Optional[str] = None
     messages: Optional[List[Dict[str, Any]]] = None
@@ -83,7 +83,7 @@ class MistralRequest:
     priority: int = 2
 
     def to_messages(self) -> List[Dict[str, Any]]:
-        """Mistral APIに渡す messages 配列を自動構築"""
+        """Build the ``messages`` array for the Mistral API."""
         if self.messages:
             return self.messages
         if self.prompt:
@@ -92,11 +92,11 @@ class MistralRequest:
                 {"role": "system", "content": sys_content},
                 {"role": "user", "content": self.prompt},
             ]
-        raise ValueError("`prompt` または `messages` のいずれかを指定してください。")
+        raise ValueError("Specify either `prompt` or `messages`.")
 
 
 def get_secure_temp_db_path() -> str:
-    """セキュリティを強化したテンポラリDBパスを生成（所有者のみ 0700 アクセス可）。
+    """Build a temp DB path under a per-user directory (mode ``0700``).
 
     Override with ``MMQ_TEMP_DB_PATH`` (full file path) for tests / isolation.
     """
@@ -647,18 +647,19 @@ async def ask_mistral(
     system_prompt: Optional[str] = None,
     priority: int = 2,
 ) -> str:
-    """Mistral APIをキューイングとレートリミット制御付きで呼び出します。
-    
+    """Call the Mistral API with queuing and shared rate-limit control.
+
     Args:
-        ctx: MCP Context (自動で渡されます)
-        prompt: 単発の入力プロンプトテキスト
-        messages: 会話履歴オブジェクトの配列 ([{"role": "...", "content": "..."}])
-        model: 利用する Mistral モデル名 (default: mistral-small-latest)
-        system_prompt: カスタムシステムプロンプト (prompt 指定時のみ有効)
-        priority: タスク優先度 (1: 高, 2: 通常, 3: 低)
-    
+        ctx: MCP context (injected automatically by the host).
+        prompt: Single-shot user prompt text.
+        messages: Conversation history
+            (``[{"role": "...", "content": "..."}]``).
+        model: Mistral model name (default: ``mistral-small-latest``).
+        system_prompt: Custom system prompt (only used with ``prompt``).
+        priority: Task priority (1: high, 2: normal, 3: low).
+
     Returns:
-        Mistral API からのレスポンステキスト
+        Response text from the Mistral API.
     """
     req = MistralRequest(
         prompt=prompt,
@@ -671,22 +672,22 @@ async def ask_mistral(
 
 
 def parse_messages_json(messages_str: Optional[str]) -> Optional[List[Dict[str, Any]]]:
-    """JSON文字列を messages 配列に変換します。"""
+    """Parse a JSON string into a ``messages`` array."""
     if messages_str is None:
         return None
     try:
         return json.loads(messages_str)
     except json.JSONDecodeError as e:
-        raise ValueError(f"messages JSON が不正です: {e}")
+        raise ValueError(f"Invalid messages JSON: {e}")
 
 
 def start_mcp_server() -> None:
-    """MCP サーバーを stdio で起動します (FastMCP.run は同期 API)。"""
+    """Start the MCP server on stdio (``FastMCP.run`` is a sync API)."""
     mcp.run(transport="stdio")
 
 
 async def run_cli(args) -> int:
-    """CLI モードで実行します。"""
+    """Run in CLI mode."""
     messages = parse_messages_json(args.messages)
     
     req = MistralRequest(
@@ -710,19 +711,19 @@ async def run_cli(args) -> int:
 
 
 def main():
-    """エントリーポイント。"""
+    """CLI / MCP entry point."""
     parser = argparse.ArgumentParser(
         description="Mistral API Queue - CLI mode",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # 基本実行 (CLI)
-  uv run mmq.py "Pythonの解説をして"
+  # Basic run (CLI)
+  uv run mmq.py "Explain Python briefly"
 
-  # モデル指定
-  uv run mmq.py -m mistral-large-latest "解説をして"
+  # Choose a model
+  uv run mmq.py -m mistral-large-latest "Explain this algorithm"
 
-  # MCPサーバーモード (Vibe / Claude Desktop 等に登録)
+  # MCP server mode (register with Vibe / Claude Desktop / etc.)
   uv run mmq.py --mcp
 """,
     )
@@ -730,34 +731,34 @@ Examples:
         "prompt",
         nargs="?",
         default=None,
-        help="入力プロンプトテキスト",
+        help="Input prompt text",
     )
     parser.add_argument(
         "-m", "--model",
         default=DEFAULT_MODEL,
-        help=f"モデル名 (default: {DEFAULT_MODEL})",
+        help=f"Model name (default: {DEFAULT_MODEL})",
     )
     parser.add_argument(
         "-s", "--system-prompt",
         default=None,
-        help="システムプロンプト",
+        help="System prompt",
     )
     parser.add_argument(
         "--priority",
         type=int,
         default=2,
         choices=[1, 2, 3],
-        help="タスク優先度 (1: 高, 2: 通常, 3: 低) (default: 2)",
+        help="Task priority (1: high, 2: normal, 3: low) (default: 2)",
     )
     parser.add_argument(
         "--messages",
         default=None,
-        help="Messages 配列を JSON 文字列で指定",
+        help="Messages array as a JSON string",
     )
     parser.add_argument(
         "--mcp",
         action="store_true",
-        help="MCP サーバーモードで起動",
+        help="Start in MCP server mode",
     )
     
     args = parser.parse_args()

@@ -17,6 +17,9 @@
 | ✅ 完了 | Vibe CLI 対応 | P1 | 1h |
 | ✅ 完了 | .gitignore 作成 | P1 | 0.5h |
 | ✅ 完了 | pyproject.toml 作成 | P1 | 0.5h |
+| ✅ 完了 | ソース英語化（docstring / argparse / 例外） | P1 | 1h |
+| ✅ 完了 | README 多言語構成（en / ja / fr） | P1 | 2h |
+| ✅ 完了 | README 実装整合（path 主導・overclaim 除去） | P1 | 1h |
 
 ---
 
@@ -26,26 +29,26 @@
 
 | 状況 | タスク | 説明 | 見積 | 依存 |
 |------|-------|------|------|------|
-| ⏳ | uv 最小バージョンを必須に | 前提条件を明確化 | 0.2h | - |
-| ⏳ | `export` コマンドのバッククオート統一 | README.md 内のコードブロックを整形 | 0.5h | - |
+| ⏳ | uv 最小バージョンを必須に | 前提条件を明確化（README / pyproject） | 0.2h | - |
+| ✅ | `export` / コードブロック整形 | 現行 README は fenced block で問題なし | 0.5h | - |
 
 ### 中優先度 (P2)
 
 | 状況 | タスク | 説明 | 見積 | 依存 |
 |------|-------|------|------|------|
 | ⏳ | `get_secure_temp_db_path()` のセキュリティ強化 | ownership 検証を追加 | 1h | - |
-| ⏳ | Mistral SDK バージョン固定 | SDK のバージョンを固定 | 0.5h | - |
-| ⏳ | `/tmp` から `XDG_RUNTIME_DIR` へ移行 | DB 保存先を変更 | 1h | - |
+| ⏳ | Mistral SDK バージョン固定 | 現状は `>=1.0.0,<2` レンジ。厳密ピンが必要なら | 0.5h | - |
+| ⏳ | `/tmp` から `XDG_RUNTIME_DIR` へ移行 | DB 保存先を変更（現状は `tempfile.gettempdir()`） | 1h | - |
 | ⏳ | 非同期 DB 接続 (aiosqlite) | DB 操作を非同期化 | 2h | - |
-| ⏳ | 429 エラーのリトライ前に待機 | バックオフ待機を実装 | 1h | - |
+| ✅ | 429 エラーのリトライ前に待機 | P0 で実装済み（共有バックオフ → ゲート再通過） | 1h | - |
 | ⏳ | Progress total の動的化 | ストリームの総数を動的に | 1h | - |
-| ⏳ | DB 操作を全て `asyncio.to_thread` に | 一貫性を保つ | 1h | - |
+| ⏳ | DB 操作を全て `asyncio.to_thread` に | `init_db` / `clean_zombie_tasks` はまだ同期直呼び | 1h | - |
 | ⏳ | HTTP ステータスコード優先判定 | エラーチェックを強化 | 0.5h | - |
-| ⏳ | pyproject.toml build 設定修正 | パッケージ化をサポート | 0.5h | - |
+| ✅ | pyproject.toml build 設定修正 | hatch wheel/sdist + `mmq` script 済み | 0.5h | - |
 | ⏳ | 両方指定時エラー | `prompt` と `messages` 同時指定を防ぐ | 0.5h | - |
 | ⏳ | status/priority インデックス | DB パフォーマンス向上 | 1h | - |
 | ⏳ | 構造化エラー返却 | エラー情報を充実 | 1h | - |
-| ⏳ | LICENSE 末尾改行 | 形式を整える | 0.1h | - |
+| ⏳ | LICENSE 末尾改行 | 現状末尾改行なし | 0.1h | - |
 
 ---
 
@@ -71,11 +74,13 @@ _絶対パス指定や Git URL 指定をなくし、`uvx`・`pip` 一発で使�
 
 - [ ] **PyPI への公開 (`uv build` → `uv publish`)**
 
-  - **MCP 設定の簡略化:** Claude Desktop / Vibe での起動コマンドを `uvx mcp-mistral-queue --mcp` に変更 (ローカルパス指定を不要に)
+  - **MCP 設定の簡略化:** 公開後は README 主導線を `uvx` / インストール済み `mmq --mcp` に切替可能（entry point は **`mmq`**。パッケージ名 `mcp-mistral-queue` と混同しない）
 
   - **他プロジェクト依存の簡略化:** `pyproject.toml` に `"mcp-mistral-queue"` と書くだけで連携可能に
 
   - **CLI 実行:** どこからでも `mmq` コマンドで単発実行できるように整備
+
+  - **公開前:** path ベース `uv run …/mmq.py --mcp` を主導線のまま（現状 README en/ja/fr 準拠）
 
 ### 3. `--purge` コマンド（緊急ブレーキ機能）
 
@@ -124,7 +129,7 @@ _AI Agent の誤作動や大量連投をリセットするための JOB 強制�
   - **受け入れ条件（必須）:**
     - unit テスト（待ち件数・次スロット秒数・空キュー等のエッジ）
     - MCP e2e（`list_tools` に載る / call のレスポンス形）
-    - README への記載は **実装＋テスト完了後**。en / ja を同時更新する
+    - README への記載は **実装＋テスト完了後**。en / ja / fr を同時更新する
     - **未実装のまま README に載せない**（公開面の overclaim 禁止）
 
 - [ ] **デフォルトモデルの更新**
@@ -138,37 +143,35 @@ _AI Agent の誤作動や大量連投をリセットするための JOB 強制�
 
 ### 5. ソースコードの英語化
 
-- [ ] **ソースコード内のメッセージ英語化**
+- [x] **ソースコード内のメッセージ英語化**
 
-  - Docstring (`MistralRequest`, `ask_mistral`, `main` など)
+  - [x] Docstring (`MistralRequest`, `ask_mistral`, `main` など)
+  - [x] `argparse` の `help` および `epilog`
+  - [x] 例外メッセージ (`ValueError` など)
 
-  - `argparse` の `help` および `epilog`
-
-  - 例外メッセージ (`ValueError` など)
+  _注: 作業ツリー上 `mmq.py` に反映済み。未コミットなら commit 対象。_
 
 ### 6. ドキュメントの再構成・多言語対応
 
-- [ ] **README ファイル構成の変更**
+- [x] **README ファイル構成の変更**
 
-  - メイン `README.md` を英語化 (PyPI / GitHub 表示の標準に設定)。
+  - [x] メイン `README.md` を英語化
+  - [x] 日本語を `README.ja.md` に
+  - [x] フランス語 `README.fr.md` を追加
+  - [x] 先頭に相互リンク
 
-  - 既存の日本語ファイルを `README.ja.md` に変更。
+- [x] **README 記載内容の実装整合（公開前）**
 
-  - フランス語用の `README.fr.md` を追加。
+  - [x] path ベース `uv run …/mmq.py --mcp` を主導線に
+  - [x] 未実装 `get_queue_status` を README に載せない
+  - [x] default model 表記をコードと一致（`mistral-small-latest`）
+  - [x] DB パスを `tempfile.gettempdir()` + `MMQ_TEMP_DB_PATH` に合わせて記載
 
-  - 各 README の先頭に相互リンクを追加:
+- [ ] **README 記載内容の更新（機能・公開とセット）**
 
-    ```markdown
-    [English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)
-    ```
-
-- [ ] **README 記載内容の更新**
-
-  - デフォルトモデルを `mistral-medium-3-5` に修正（コード変更と同時。現状コードは `mistral-small-latest`）。
-
-  - `uvx` / `pip` 経由の起動例・MCP設定例 (`uvx mcp-mistral-queue --mcp`) は **PyPI 公開後** に。entry point は `mmq`（`mcp-mistral-queue` ではない点に注意）。公開前は path ベース `uv run` を主導線にする。
-
-  - ツール一覧に `get_queue_status` を追加するのは **§4 実装＋テスト完了後**（未実装の先行記載はしない）。
+  - [ ] デフォルトモデルを `mistral-medium-3-5` に修正（§4 コード変更と同時）
+  - [ ] `uvx` / 公開後の起動例（entry point `mmq`）を PyPI 公開後に
+  - [ ] ツール一覧に `get_queue_status`（§4 実装＋テスト完了後）
 
 ---
 
@@ -177,8 +180,26 @@ _AI Agent の誤作動や大量連投をリセットするための JOB 強制�
 ```
 docs/
 ├── NOTES.md          # 機能検討ログ・バックログ
+├── SMOKE_VIBE.md     # Vibe 手動スモーク
 └── tasks.md          # タスク管理 (本ファイル)
 ```
+
+---
+
+## 🧭 次にやること候補（議論用）
+
+公開前のドキュメント/英語化は一通り揃った。残りは「機能」「運用」「公開」のどれを取るか。
+
+| 優先候補 | 内容 | 理由 |
+|----------|------|------|
+| **A. `get_queue_status`** | MCP ツール + unit/e2e + 三言語 README | エージェントが待ち時間を判断できる。受け入れ条件は既に明文化済み |
+| **B. 小粒クリーンアップ** | LICENSE 末尾改行 / `prompt`+`messages` 同時指定エラー / `__all__` / `init_db` の `to_thread` | 30分〜2h。公開前の体裁と API 明確化 |
+| **C. `--purge`** | pending / all / id 取り消し | 誤爆連投時の緊急ブレーキ。CLI 運用向け |
+| **D. PyPI 公開** | `uv build` → publish → README を `mmq`/`uvx` 主導に切替 | インストール摩擦を下げる。entry point 名に注意 |
+| **E. デフォルトモデル変更** | `mistral-medium-3-5` へ（コード+テスト+README 同時） | 製品判断。無料枠・品質のトレードオフ確認が先 |
+
+**おすすめの並び（案）:** 未コミット `mmq.py` 英語化を commit → **B（10分）** → **A（本丸）** → 必要なら C → 準備できたら D。  
+E は A と独立だが「README をまた触る」ので A の README 更新と同じ PR に載せるか、別 PR で明示する。
 
 ---
 
