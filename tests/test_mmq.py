@@ -27,13 +27,14 @@ except Exception:
     _ensure_module("mcp.server.fastmcp")
 
 try:
-    from mistralai.client import Mistral  # noqa: F401
+    from mistralai import Mistral  # noqa: F401
 except Exception:
-    _ensure_module("mistralai")
-    _ensure_module("mistralai.client")
-    # Add Mistral class to mistralai.client for mmq.py import
-    import mistralai
-    mistralai.client.Mistral = MagicMock()
+    # Offline: stub package so ``from mistralai import Mistral`` succeeds.
+    import types
+
+    mod = types.ModuleType("mistralai")
+    mod.Mistral = MagicMock(name="Mistral")
+    sys.modules["mistralai"] = mod
 
 from mmq import (
     BASE_WAIT_TIME,
@@ -142,6 +143,25 @@ class TestMistralRequest:
         req = MistralRequest()
         with pytest.raises(ValueError, match="prompt.*messages"):
             req.to_messages()
+
+    def test_to_messages_both_prompt_and_messages_raises(self):
+        """Test that specifying both prompt and messages raises ValueError."""
+        req = MistralRequest(
+            prompt="hi",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        with pytest.raises(ValueError, match="not both"):
+            req.to_messages()
+
+    def test_public_all_exports(self):
+        """Public API surface is declared via __all__."""
+        import mmq as mmq_mod
+
+        assert set(mmq_mod.__all__) == {
+            "MistralRequest",
+            "execute_mistral_queue_async",
+            "ask_mistral",
+        }
 
 
 # =============================================================================

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
-from mistralai.client import Mistral
+from mistralai import Mistral
 
 # === Constant Configuration (env overrides for tests / local tuning) ===
 
@@ -71,6 +71,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-mistral-queue")
 
+__all__ = ["MistralRequest", "execute_mistral_queue_async", "ask_mistral"]
+
 
 @dataclass
 class MistralRequest:
@@ -83,7 +85,12 @@ class MistralRequest:
     priority: int = 2
 
     def to_messages(self) -> List[Dict[str, Any]]:
-        """Build the ``messages`` array for the Mistral API."""
+        """Build the ``messages`` array for the Mistral API.
+
+        Exactly one of ``prompt`` or ``messages`` must be set.
+        """
+        if self.prompt is not None and self.messages is not None:
+            raise ValueError("Specify only one of `prompt` or `messages`, not both.")
         if self.messages:
             return self.messages
         if self.prompt:
@@ -268,7 +275,7 @@ async def register_task(req: MistralRequest) -> int:
     Returns:
         The assigned task ID
     """
-    clean_zombie_tasks()
+    await asyncio.to_thread(clean_zombie_tasks)
     summary = (
         (req.prompt or "")[:30]
         if req.prompt
@@ -588,7 +595,7 @@ async def execute_mistral_queue_async(
     if not api_key:
         raise ValueError("Environment variable MISTRAL_API_KEY is not set.")
     
-    init_db()
+    await asyncio.to_thread(init_db)
     final_messages = req.to_messages()
     
     # 1. Register task
