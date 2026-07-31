@@ -51,6 +51,7 @@ from mmq import (
     get_secure_temp_db_path,
     init_db,
     is_rate_limit_error,
+    purge_tasks,
     read_queue_status,
     register_task,
     touch_task,
@@ -429,6 +430,61 @@ class TestQueueStatus:
         status = read_queue_status()
         assert status["current_wait_interval"] == 31.0
         assert 25.0 <= status["seconds_until_next_slot"] <= 31.0
+
+
+# =============================================================================
+# Test purge (emergency brake)
+# =============================================================================
+
+class TestPurgeTasks:
+    """Tests for purge_tasks CLI helpers."""
+
+    @pytest.mark.asyncio
+    async def test_purge_pending_only(self, initialized_db):
+        p = await register_task(MistralRequest(prompt="pending"))
+        r = await register_task(MistralRequest(prompt="running"))
+        await update_task_status(r, "processing")
+
+        n = purge_tasks(pending=True)
+        assert n == 1
+        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (p,))
+            assert cursor.fetchone()[0] == "cancelled"
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (r,))
+            assert cursor.fetchone()[0] == "processing"
+
+    @pytest.mark.asyncio
+    async def test_purge_all_pending_and_processing(self, initialized_db):
+        p = await register_task(MistralRequest(prompt="p"))
+        r = await register_task(MistralRequest(prompt="r"))
+        await update_task_status(r, "processing")
+        done = await register_task(MistralRequest(prompt="done"))
+        await update_task_status(done, "completed", "ok")
+
+        n = purge_tasks(pending=True, processing=True)
+        assert n == 2
+        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (done,))
+            assert cursor.fetchone()[0] == "completed"
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (p,))
+            assert cursor.fetchone()[0] == "cancelled"
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (r,))
+            assert cursor.fetchone()[0] == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_purge_by_task_id(self, initialized_db):
+        a = await register_task(MistralRequest(prompt="a"))
+        b = await register_task(MistralRequest(prompt="b"))
+        n = purge_tasks(task_id=a)
+        assert n == 1
+        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (a,))
+            assert cursor.fetchone()[0] == "cancelled"
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (b,))
+            assert cursor.fetchone()[0] == "pending"
 
 
 # =============================================================================

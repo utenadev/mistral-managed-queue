@@ -47,6 +47,11 @@ uv run mmq.py --priority 1 "緊急度が高い質問"
 
 # 対話コンテキスト (messages 配列) を直接渡す
 uv run mmq.py --messages '[{"role":"system","content":"厳格なプログラマー"},{"role":"user","content":"Rustの所有権とは？"}]'
+
+# 緊急ブレーキ: キュー投入済み / スタックした作業をキャンセル（API は呼ばない）
+uv run mmq.py --purge          # pending をすべてキャンセル
+uv run mmq.py --purge-all      # pending + processing をキャンセル
+uv run mmq.py --purge-id 42    # 指定 ID をキャンセル
 ```
 
 ### 2. MCP サーバーモード（Mistral Vibe / 他クライアント連携）

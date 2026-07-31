@@ -744,6 +744,54 @@ def parse_messages_json(messages_str: Optional[str]) -> Optional[List[Dict[str, 
         raise ValueError(f"Invalid messages JSON: {e}")
 
 
+def purge_tasks(
+    *,
+    pending: bool = False,
+    processing: bool = False,
+    task_id: Optional[int] = None,
+) -> int:
+    """Cancel matching tasks (set status to ``cancelled``).
+
+    Exactly one mode must be used:
+      - ``task_id``: cancel that row if present
+      - ``pending`` only: cancel all pending
+      - ``pending`` and ``processing``: cancel pending + processing (purge-all)
+
+    Returns:
+        Number of rows updated.
+    """
+    if task_id is not None and (pending or processing):
+        raise ValueError("Cannot combine task_id with pending/processing filters.")
+    if task_id is None and not pending and not processing:
+        raise ValueError("Specify task_id and/or pending/processing filters.")
+
+    init_db()
+    now = time.time()
+    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+        cursor = conn.cursor()
+        if task_id is not None:
+            cursor.execute(
+                "UPDATE tasks SET status = 'cancelled', result = ?, updated_at = ? "
+                "WHERE id = ? AND status IN ('pending', 'processing')",
+                ("Purged by task id", now, task_id),
+            )
+        else:
+            statuses: List[str] = []
+            if pending:
+                statuses.append("pending")
+            if processing:
+                statuses.append("processing")
+            placeholders = ",".join("?" * len(statuses))
+            cursor.execute(
+                f"UPDATE tasks SET status = 'cancelled', result = ?, updated_at = ? "
+                f"WHERE status IN ({placeholders})",
+                ("Purged", now, *statuses),
+            )
+        count = cursor.rowcount
+        conn.commit()
+    return int(count or 0)
+
+
 def start_mcp_server() -> None:
     """Start the MCP server on stdio (``FastMCP.run`` is a sync API)."""
     mcp.run(transport="stdio")
@@ -773,6 +821,35 @@ async def run_cli(args) -> int:
         return 1
 
 
+def run_purge(args) -> int:
+    """Handle --purge / --purge-all / --purge-id CLI modes."""
+    modes = sum(
+        [
+            bool(args.purge),
+            bool(args.purge_all),
+            args.purge_id is not None,
+        ]
+    )
+    if modes != 1:
+        print(
+            "Error: specify exactly one of --purge, --purge-all, or --purge-id",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        if args.purge_id is not None:
+            n = purge_tasks(task_id=args.purge_id)
+        elif args.purge_all:
+            n = purge_tasks(pending=True, processing=True)
+        else:
+            n = purge_tasks(pending=True)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    print(f"Cancelled {n} task(s).")
+    return 0
+
+
 def main():
     """CLI / MCP entry point."""
     parser = argparse.ArgumentParser(
@@ -785,6 +862,11 @@ Examples:
 
   # Choose a model
   uv run mmq.py -m mistral-large-latest "Explain this algorithm"
+
+  # Emergency brake: cancel queued work
+  uv run mmq.py --purge
+  uv run mmq.py --purge-all
+  uv run mmq.py --purge-id 42
 
   # MCP server mode (register with Vibe / Claude Desktop / etc.)
   uv run mmq.py --mcp
@@ -823,11 +905,30 @@ Examples:
         action="store_true",
         help="Start in MCP server mode",
     )
+    parser.add_argument(
+        "--purge",
+        action="store_true",
+        help="Cancel all pending tasks (emergency brake)",
+    )
+    parser.add_argument(
+        "--purge-all",
+        action="store_true",
+        help="Cancel all pending and processing tasks",
+    )
+    parser.add_argument(
+        "--purge-id",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="Cancel a single task by ID",
+    )
     
     args = parser.parse_args()
     
     if args.mcp:
         start_mcp_server()
+    elif args.purge or args.purge_all or args.purge_id is not None:
+        sys.exit(run_purge(args))
     elif args.prompt is None and args.messages is None:
         parser.print_help()
         sys.exit(1)

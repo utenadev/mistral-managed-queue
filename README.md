@@ -47,6 +47,11 @@ uv run mmq.py --priority 1 "Urgent question"
 
 # Full conversation context as a messages JSON array
 uv run mmq.py --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
+
+# Emergency brake: cancel queued / stuck work (no API call)
+uv run mmq.py --purge          # cancel all pending
+uv run mmq.py --purge-all      # cancel pending + processing
+uv run mmq.py --purge-id 42    # cancel one task by ID
 ```
 
 ### 2. MCP server mode (Mistral Vibe / other clients)
