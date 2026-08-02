@@ -2,65 +2,135 @@
 
 [English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)
 
-Un serveur MCP (Model Context Protocol) et outil CLI qui coordonne les appels locaux, multi-processus et multi-clients vers le niveau gratuit de Mistral (environ 1 requête / 30 secondes) via une file d'attente SQLite partagée.
-Il utilise SQLite (mode WAL) et une file d'attente asynchrone avec une seule tâche en cours pour espacer les démarrages de requête. Il s'agit d'un contrôle de trafic de type "best effort", et non d'un SLA officiel.
+[![PyPI](https://img.shields.io/pypi/v/mcp-mistral-queue)](https://pypi.org/project/mcp-mistral-queue/)
+
+Un serveur MCP (Model Context Protocol) et un outil CLI qui coordonne les appels locaux et multi-processus/multi-clients à l'offre gratuite de Mistral (~1 requête / 30 secondes) via une file d'attente partagée SQLite.
+Il utilise SQLite (mode WAL) et une file d'attente asynchrone avec une seule tâche en vol pour espacer les débuts de requête. Il s'agit d'un contrôle de trafic au mieux, et non d'un SLA officiel.
+
+**Package :** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) sur PyPI · **script console :** `mmq` (pas le nom du package) · **version actuelle :** `0.1.0`
 
 ## Fonctionnalités
 
- * **Coordination automatique des limites de débit** : intervalle de départ partagé d'environ 31 secondes ; en cas de 429, repli partagé puis réentrée dans la porte. Réinitialisation à l'intervalle de base en cas de succès.
- * **Multi-processus et contrôle de priorité** : plusieurs processus/tâches peuvent mettre des travaux en file. Priorité (1-3) plus traitement séquentiel avec une seule tâche en cours pour ordonner la file.
- * **Options flexibles de modèle et de message** : n'importe quel nom de modèle de chat Mistral (par défaut `mistral-small-latest` ; par exemple `mistral-large-latest`, `codestral-latest`), ainsi que l'historique complet de conversation via un tableau `messages`.
- * **Streaming et gestion de l'annulation** : diffusion interne de la réponse de l'API Mistral (l'outil retourne le texte complet) ; en cas d'annulation client (`CancelledError`), mise à jour du statut de la tâche dans la base de données.
- * **Base de données de contrôle locale** : base de données temporaire dans un répertoire par utilisateur avec le mode `0700` (chemin remplaçable via `MMQ_TEMP_DB_PATH`).
- * **Compatible uv** : métadonnées de script en ligne PEP 723 ; utilisez `uv run` pour résoudre les dépendances.
- * **Intégration Mistral Vibe** : enregistrez en tant que serveur MCP (`--mcp`) pour Vibe / Claude Desktop / clients similaires. Utilisation CLI directe via `uv run` (pas via `vibe mmq.py ...`).
+ * **Coordination automatique des limites de débit :** Intervalle de début partagé d'environ 31 secondes ; en cas de 429, repli partagé puis réintégration de la file. Réinitialisation à l'intervalle de base en cas de succès.
+ * **Contrôle multi-processus et de priorité :** Plusieurs processus/tâches peuvent mettre des travaux en file d'attente. La priorité (1–3) ainsi que l'ordre de traitement de la file d'attente unique déterminent l'ordre de la file.
+ * **Options flexibles de modèle et de message :** Tout nom de modèle de chat Mistral (par défaut `mistral-small-latest` ; par ex. `mistral-large-latest`, `codestral-latest`), ainsi que l'historique complet de la conversation via un tableau `messages`.
+ * **Streaming et gestion des annulations :** Stream la réponse de l'API Mistral en interne (l'outil retourne le texte complet) ; en cas d'annulation par le client (`CancelledError`), met à jour le statut de la tâche dans la base de données.
+ * **Base de données de contrôle locale :** Base de données temporaire dans un répertoire par utilisateur avec le mode `0700` (le chemin peut être remplacé via `MMQ_TEMP_DB_PATH`).
+ * **PyPI / uvx :** Installation unique ou exécution éphémère ; le point d'entrée est `mmq`.
+ * **Mistral Vibe / Grok / Claude Desktop :** Enregistrement en tant que serveur MCP (`mmq --mcp`). **Ne pas** utiliser `vibe mmq.py "..."` — cela exécute le CLI de l'agent Vibe, pas cet outil.
+ * **Adapté à l'offre gratuite :** Tâches occasionnelles (par ex. traduction de documentation) qui peuvent attendre ~31 secondes entre les appels sans épuiser une pile de limites de débit dédiée.
 
 ## Prérequis
 
  * Python 3.10+
- * [uv](https://github.com/astral-sh/uv) installé (0.1.0+ recommandé)
+ * [uv](https://github.com/astral-sh/uv) recommandé (`uvx` / `uv run`) ; `pip` fonctionne également
  * Une clé API Mistral (`MISTRAL_API_KEY`)
 
 ```bash
 export MISTRAL_API_KEY="your-mistral-api-key"
 ```
 
-## Utilisation
 
-### 1. Mode CLI (exécution directe)
+## Installation (PyPI)
 
-**Exécutez le script avec `uv run`.**
-La commande `vibe` est le **CLI agent** de Mistral Vibe ; `vibe mmq.py "..."` n'exécute **pas** ce script.
+Publié et vérifié sur [PyPI](https://pypi.org/project/mcp-mistral-queue/).
 
 ```bash
-# Exécution de base (modèle par défaut : mistral-small-latest)
-uv run mmq.py "Explain Python list comprehensions briefly"
+# One-shot (no permanent install) — recommended for MCP hosts
+uvx --from mcp-mistral-queue mmq --help
 
-# Choix d'un modèle (par exemple mistral-large-latest, codestral-latest)
-uv run mmq.py -m mistral-large-latest "Explain a complex algorithm"
+# Or install into an environment
+uv pip install mcp-mistral-queue
+# pip install mcp-mistral-queue
 
-# Invite système personnalisée
-uv run mmq.py -s "You are an AI that speaks casually." "How is the weather today?"
-
-# Priorité (1 : haute, 2 : normale, 3 : basse)
-uv run mmq.py --priority 1 "Urgent question"
-
-# Contexte de conversation complet sous forme de tableau JSON de messages
-uv run mmq.py --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
-
-# Frein d'urgence : annuler le travail en file / bloqué (sans appel API)
-uv run mmq.py --purge          # annuler tous les pending
-uv run mmq.py --purge-all      # annuler pending + processing
-uv run mmq.py --purge-id 42    # annuler une tâche par ID
+mmq --help
 ```
 
-### 2. Mode serveur MCP (Mistral Vibe / autres clients)
 
-Exposez l'outil **`ask_mistral`** à Vibe, Claude Desktop, OpenCode, Goose et clients similaires.
-Ceci est un chemin distinct du CLI `uv run mmq.py "..."`.
+**Test rapide (nécessite `MISTRAL_API_KEY` ; compte contre le quota de l'offre gratuite) :**
 
-**Depuis une copie locale** (fonctionne dès maintenant ; `uv run` résout les deps PEP 723).  
-Voir [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
+```bash
+uvx --from mcp-mistral-queue mmq "Reply with pong only."
+```
+
+
+**Remarques :**
+
+ * Le nom du script console est **`mmq`**. Faux : `uvx mcp-mistral-queue --mcp`. Correct : `uvx --from mcp-mistral-queue mmq --mcp`.
+ * Dépendances : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2` (inclus dans le package).
+
+## Utilisation
+
+### 1. Mode CLI
+
+Après installation via PyPI / via `uvx`, invoquez **`mmq`**.
+Depuis une copie locale du dépôt, vous pouvez toujours utiliser `uv run mmq.py ...` (PEP 723).
+
+```bash
+# Basic run (default model: mistral-small-latest)
+uvx --from mcp-mistral-queue mmq "Explain Python list comprehensions briefly"
+# or: mmq "Explain Python list comprehensions briefly"
+
+# Choose a model (e.g. mistral-large-latest, codestral-latest)
+mmq -m mistral-large-latest "Explain a complex algorithm"
+
+# Custom system prompt
+mmq -s "You are an AI that speaks casually." "How is the weather today?"
+
+# Priority (1: high, 2: normal, 3: low)
+mmq --priority 1 "Urgent question"
+
+# Full conversation context as a messages JSON array
+# (specify either prompt or --messages, not both)
+mmq --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
+
+# Emergency brake: cancel queued / stuck work (no API call)
+mmq --purge          # cancel all pending
+mmq --purge-all      # cancel pending + processing
+mmq --purge-id 42    # cancel one task by ID
+```
+
+
+### 2. Mode serveur MCP (Vibe / Grok / Claude Desktop / …)
+
+Expose **`ask_mistral`** et **`get_queue_status`** aux hôtes MCP.
+Séparez le chemin des invites CLI.
+
+#### PyPI / uvx (recommandé)
+
+```json
+{
+  "mcpServers": {
+    "mistral-queue": {
+      "command": "uvx",
+      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
+      "env": {
+        "MISTRAL_API_KEY": "your-mistral-api-key"
+      }
+    }
+  }
+}
+```
+
+
+Si `mmq` est déjà sur `PATH` (venv / `uv pip install`) :
+
+```json
+{
+  "mcpServers": {
+    "mistral-queue": {
+      "command": "mmq",
+      "args": ["--mcp"],
+      "env": {
+        "MISTRAL_API_KEY": "your-mistral-api-key"
+      }
+    }
+  }
+}
+```
+
+
+#### Copie locale du dépôt (développement)
 
 ```json
 {
@@ -83,85 +153,118 @@ Voir [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
 }
 ```
 
-**Après installation depuis PyPI** (le script console est `mmq`, pas le nom du package) :
 
-```bash
-uvx --from mcp-mistral-queue mmq --mcp
-# ou : pip install mcp-mistral-queue && mmq --mcp
-```
+Après avoir modifié la configuration, redémarrez le client. Liste de contrôle Vibe manuelle : [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
 
-```json
-{
-  "mcpServers": {
-    "mistral-queue": {
-      "command": "uvx",
-      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
-      "env": {
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
+### 3. Variables d'environnement (optionnel)
 
-Après modification de la config, redémarrez le client et faites utiliser les outils (`ask_mistral`, `get_queue_status`).
+| Variable | Valeur par défaut | Objectif |
+|---|---|---|
+| `MISTRAL_API_KEY` | (requis) | Clé API Mistral |
+| `MMQ_TEMP_DB_PATH` | par utilisateur dans tempdir | Chemin du fichier de la base de données de la file d'attente partagée |
+| `MMQ_BASE_WAIT_TIME` | `31` | Secondes entre les débuts (rythme de l'offre gratuite) |
+| `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Nom du modèle par défaut |
+| `MMQ_FAKE_API` | désactivé | Hors ligne / e2e : client factice (`1`/`true`) |
+
+D'autres paramètres (`MMQ_MAX_WAIT_TIME`, `MMQ_MAX_RETRIES`, …) existent pour l'ajustement ; voir `mmq.py`.
 
 ### Outils MCP
 
-Lorsque le serveur est en cours d'exécution, les clients peuvent utiliser les outils suivants :
+Lorsque le serveur est en cours d'exécution, les clients peuvent utiliser les outils suivants :
 
 #### `ask_mistral`
 
-| Argument | Type | Défaut | Description |
+| Argument | Type | Valeur par défaut | Description |
 |---|---|---|---|
-| prompt | string | null | Texte d'invite utilisateur en une seule fois |
-| messages | array | null | Historique de conversation (`[{"role": "...", "content": "..."}]`) |
-| model | string | `"mistral-small-latest"` | Nom du modèle Mistral |
-| system_prompt | string | null | Invite système personnalisée (uniquement lors de l'utilisation de `prompt`) |
-| priority | number | 2 | Priorité de la tâche (1 : haute, 2 : normale, 3 : basse) |
+| prompt | chaîne | null | Texte de l'invite utilisateur ponctuelle |
+| messages | tableau | null | Historique de la conversation (`[{"role": "...", "content": "..."}]`) |
+| model | chaîne | `"mistral-small-latest"` | Nom du modèle Mistral |
+| system_prompt | chaîne | null | Invite système personnalisée (uniquement lors de l'utilisation de `prompt`) |
+| priority | nombre | 2 | Priorité de la tâche (1 : élevée, 2 : normale, 3 : basse) |
 
 #### `get_queue_status`
 
-Retourne l'état actuel de la file partagée / limite de débit en JSON :
+Retourne l'état actuel de la file d'attente partagée / des limites de débit au format JSON :
 
 | Champ | Type | Description |
 |---|---|---|
-| pending | number | Tâches en attente dans la file |
-| processing | number | Tâches actuellement réservées / en cours |
-| seconds_until_next_slot | number | Secondes avant l'ouverture du créneau API partagé |
-| current_wait_interval | number | Intervalle d'attente partagé actif (secondes) |
-| in_flight | boolean | Indique si une tâche est en cours de traitement |
+| pending | nombre | Tâches en attente dans la file |
+| processing | nombre | Tâches actuellement revendiquées / en cours d'exécution |
+| seconds_until_next_slot | nombre | Secondes avant l'ouverture de la porte partagée de l'API |
+| current_wait_interval | nombre | Intervalle d'attente partagé actif (secondes) |
+| in_flight | booléen | Si une tâche est actuellement en cours de traitement |
 
 ## Emplacement des données de contrôle
 
-La base de données temporaire de coordination est stockée dans un répertoire par utilisateur créé avec le mode `0700` :
+La base de données temporaire de coordination est stockée dans un répertoire par utilisateur créé avec le mode `0700` :
 
- * Par défaut : `<tempdir>/mcp_mistral_queue_<USER>/mcp_mistral_flow_control.db`
-   (`tempfile.gettempdir()`, souvent `/tmp` sous Linux)
- * Remplacement : définissez `MMQ_TEMP_DB_PATH` avec un chemin de fichier complet (le répertoire parent est créé avec `0700`)
+ * Par défaut : `<tempdir>/mcp_mistral_queue_<USER>/mcp_mistral_flow_control.db`
+   (`tempfile.gettempdir()`, souvent `/tmp` sur Linux)
+ * Remplacement : définissez `MMQ_TEMP_DB_PATH` sur un chemin de fichier complet (le répertoire parent est créé avec `0700`)
 
 ## Tests
 
 ```bash
-# Unitaires + e2e (API factice ; aucun réseau requis)
+# Unit + e2e (fake API; no network required)
 uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
   --with pytest --with pytest-asyncio --no-project \
   python -m pytest tests/ -v -m "not live"
 
-# e2e uniquement
+# e2e only
 uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
   --with pytest --with pytest-asyncio --no-project \
   python -m pytest tests/e2e -v -m "not live"
 
-# API réelle (optionnelle ; consomme le quota du niveau gratuit)
+# Live API (optional; consumes free-tier quota)
 export MISTRAL_API_KEY=...
 uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
   --with pytest --with pytest-asyncio --no-project \
   python -m pytest tests/e2e/test_live_api.py -v -m live
 ```
 
-e2e utilise `MMQ_FAKE_API=1` et un `MMQ_BASE_WAIT_TIME` court pour tester les limites de processus (CLI / MCP stdio).
+
+Les tests e2e utilisent `MMQ_FAKE_API=1` et une courte `MMQ_BASE_WAIT_TIME` pour exercer les limites de processus (CLI / stdio MCP).
 Pour une vérification manuelle de l'interface Vibe, voir [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
+
+## Exemple : utilisation par lots de mmq (`scripts/translate_readme.py`)
+
+En plus du CLI et du serveur MCP, vous pouvez appeler la file d'attente depuis Python. Ce dépôt inclut un petit exemple :
+
+**[`scripts/translate_readme.py`](scripts/translate_readme.py)** — régénère les README locaux dans différentes langues à partir de la source anglaise via **la même file d'attente de l'offre gratuite** que `mmq` / `ask_mistral`.
+
+| Idée | Pourquoi cela convient à mmq |
+|------|-----------------------------|
+| Tâche occasionnelle | Les modifications de documentation sont bien moins fréquentes que le trafic de chat |
+| Peut attendre ~31s | ja puis fr prennent chacun un créneau réservé |
+| Base de données partagée | Ne contourne pas les autres clients de l'offre gratuite sur la machine |
+| API programmatique | Utilise `execute_mistral_queue_async` + `MistralRequest` |
+
+
+```bash
+export MISTRAL_API_KEY=...
+# optional: TRANSLATE_MODEL=mistral-small-latest
+
+# From a git checkout (imports mmq.py on PYTHONPATH via the script)
+python scripts/translate_readme.py --lang ja    # one language
+python scripts/translate_readme.py --dry-run    # preview, no write
+```
+
+
+Ce que fait l'exemple :
+
+1. Protège les blocs de code délimités (FSM linéaire) et les `code` en ligne avec des espaces réservés
+2. Met en file d'attente une tâche de traduction par langue via **`execute_mistral_queue_async`**
+3. Restaure les espaces réservés, corrige le sélecteur de langue, valide (par ex. balises équilibrées)
+4. Écrit les sorties de manière atomique
+
+Utilisez-le comme modèle pour d'autres tâches par lots peu fréquentes (résumés, extraction structurée) qui doivent partager la porte de l'offre gratuite.
+
+## Documentation complémentaire
+
+ * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — fumée manuelle Vibe / MCP
+ * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — où la recherche web doit se situer (hors base mmq)
+ * [docs/tasks.md](docs/tasks.md) — backlog
+ * [docs/NOTES.md](docs/NOTES.md) — notes de conception
 
 ## Licence
 

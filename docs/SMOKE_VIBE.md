@@ -5,13 +5,32 @@ This runbook is for verifying the real **Vibe (or Claude Desktop) → MCP → mm
 
 ## Prerequisites
 
-- `uv` installed
+- `uv` installed (for `uvx` / local `uv run`)
 - `MISTRAL_API_KEY` set
-- Absolute path to this repo’s `mmq.py`
 
 ## 1. Register MCP server in Vibe
 
-Example (adapt path and env to your machine):
+### Recommended (PyPI)
+
+Console script is **`mmq`** (package name is `mcp-mistral-queue`):
+
+```json
+{
+  "mcpServers": {
+    "mistral-queue": {
+      "command": "uvx",
+      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
+      "env": {
+        "MISTRAL_API_KEY": "your-mistral-api-key"
+      }
+    }
+  }
+}
+```
+
+Quick CLI check: `uvx --from mcp-mistral-queue mmq --help`
+
+### Local checkout (development)
 
 ```json
 {
@@ -38,8 +57,8 @@ Example (adapt path and env to your machine):
 
 Notes:
 
-- Prefer `uv run ... mmq.py --mcp` so dependencies resolve without a broken editable install.
 - Do **not** set `MMQ_FAKE_API` for real usage.
+- Tools to expect: `ask_mistral`, `get_queue_status`.
 
 ## 2. Smoke checklist
 

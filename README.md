@@ -2,8 +2,12 @@
 
 [English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)
 
+[![PyPI](https://img.shields.io/pypi/v/mcp-mistral-queue)](https://pypi.org/project/mcp-mistral-queue/)
+
 An MCP (Model Context Protocol) server and CLI tool that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
 It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
+
+**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.1.0`
 
 ## Features
 
@@ -12,55 +16,115 @@ It uses SQLite (WAL mode) and async queueing with a single in-flight task to spa
  * **Flexible model & message options**: Any Mistral chat model name (defaults to `mistral-small-latest`; e.g. `mistral-large-latest`, `codestral-latest`), plus full conversation history via a `messages` array.
  * **Streaming & cancel handling**: Streams the Mistral API response internally (tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
  * **Local control DB**: Temp DB under a per-user directory with mode `0700` (path overridable via `MMQ_TEMP_DB_PATH`).
- * **uv-friendly**: PEP 723 inline script metadata; use `uv run` to resolve deps.
- * **Mistral Vibe integration**: Register as an MCP server (`--mcp`) for Vibe / Claude Desktop / similar clients. Direct CLI use is `uv run` (not `vibe mmq.py ...`).
+ * **PyPI / uvx**: Install once or run ephemerally; entry point is `mmq`.
+ * **Mistral Vibe / Grok / Claude Desktop**: Register as an MCP server (`mmq --mcp`). Do **not** use `vibe mmq.py "..."` — that runs Vibe’s agent CLI, not this tool.
+ * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
 
 ## Prerequisites
 
  * Python 3.10+
- * [uv](https://github.com/astral-sh/uv) installed (0.1.0+ recommended)
+ * [uv](https://github.com/astral-sh/uv) recommended (`uvx` / `uv run`); `pip` also works
  * A Mistral API key (`MISTRAL_API_KEY`)
 
 ```bash
 export MISTRAL_API_KEY="your-mistral-api-key"
 ```
 
+## Install (PyPI)
+
+Published and verified on [PyPI](https://pypi.org/project/mcp-mistral-queue/).
+
+```bash
+# One-shot (no permanent install) — recommended for MCP hosts
+uvx --from mcp-mistral-queue mmq --help
+
+# Or install into an environment
+uv pip install mcp-mistral-queue
+# pip install mcp-mistral-queue
+
+mmq --help
+```
+
+**Quick smoke (needs `MISTRAL_API_KEY`; counts against free-tier quota):**
+
+```bash
+uvx --from mcp-mistral-queue mmq "Reply with pong only."
+```
+
+**Notes:**
+
+ * Console script name is **`mmq`**. Wrong: `uvx mcp-mistral-queue --mcp`. Right: `uvx --from mcp-mistral-queue mmq --mcp`.
+ * Dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2` (pulled in by the package).
+
 ## Usage
 
-### 1. CLI mode (direct run)
+### 1. CLI mode
 
-**Run the script with `uv run`.**  
-The `vibe` command is Mistral Vibe’s **agent CLI**; `vibe mmq.py "..."` does **not** execute this script.
+After PyPI install / via `uvx`, invoke **`mmq`**.  
+From a git checkout you can still use `uv run mmq.py ...` (PEP 723).
 
 ```bash
 # Basic run (default model: mistral-small-latest)
-uv run mmq.py "Explain Python list comprehensions briefly"
+uvx --from mcp-mistral-queue mmq "Explain Python list comprehensions briefly"
+# or: mmq "Explain Python list comprehensions briefly"
 
 # Choose a model (e.g. mistral-large-latest, codestral-latest)
-uv run mmq.py -m mistral-large-latest "Explain a complex algorithm"
+mmq -m mistral-large-latest "Explain a complex algorithm"
 
 # Custom system prompt
-uv run mmq.py -s "You are an AI that speaks casually." "How is the weather today?"
+mmq -s "You are an AI that speaks casually." "How is the weather today?"
 
 # Priority (1: high, 2: normal, 3: low)
-uv run mmq.py --priority 1 "Urgent question"
+mmq --priority 1 "Urgent question"
 
 # Full conversation context as a messages JSON array
-uv run mmq.py --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
+# (specify either prompt or --messages, not both)
+mmq --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
 
 # Emergency brake: cancel queued / stuck work (no API call)
-uv run mmq.py --purge          # cancel all pending
-uv run mmq.py --purge-all      # cancel pending + processing
-uv run mmq.py --purge-id 42    # cancel one task by ID
+mmq --purge          # cancel all pending
+mmq --purge-all      # cancel pending + processing
+mmq --purge-id 42    # cancel one task by ID
 ```
 
-### 2. MCP server mode (Mistral Vibe / other clients)
+### 2. MCP server mode (Vibe / Grok / Claude Desktop / …)
 
-Expose the **`ask_mistral`** tool to Vibe, Claude Desktop, OpenCode, Goose, and similar clients.  
-This is a separate path from CLI `uv run mmq.py "..."`.
+Expose **`ask_mistral`** and **`get_queue_status`** to MCP hosts.  
+Separate path from CLI prompts.
 
-**From a local checkout** (works today; `uv run` resolves PEP 723 deps).  
-See [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
+#### PyPI / uvx (recommended)
+
+```json
+{
+  "mcpServers": {
+    "mistral-queue": {
+      "command": "uvx",
+      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
+      "env": {
+        "MISTRAL_API_KEY": "your-mistral-api-key"
+      }
+    }
+  }
+}
+```
+
+If `mmq` is already on `PATH` (venv / `uv pip install`):
+
+```json
+{
+  "mcpServers": {
+    "mistral-queue": {
+      "command": "mmq",
+      "args": ["--mcp"],
+      "env": {
+        "MISTRAL_API_KEY": "your-mistral-api-key"
+      }
+    }
+  }
+}
+```
+
+#### Local checkout (development)
 
 ```json
 {
@@ -83,29 +147,19 @@ See [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
 }
 ```
 
-**After installing from PyPI** (console script is `mmq`, not the package name):
+After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
 
-```bash
-# one-shot without a permanent install
-uvx --from mcp-mistral-queue mmq --mcp
-# or: pip install mcp-mistral-queue && mmq --mcp
-```
+### 3. Environment variables (optional)
 
-```json
-{
-  "mcpServers": {
-    "mistral-queue": {
-      "command": "uvx",
-      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
-      "env": {
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
+| Variable | Default | Purpose |
+|---|---|---|
+| `MISTRAL_API_KEY` | (required) | Mistral API key |
+| `MMQ_TEMP_DB_PATH` | per-user under tempdir | Shared queue DB file path |
+| `MMQ_BASE_WAIT_TIME` | `31` | Seconds between starts (free-tier pacing) |
+| `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Default model name |
+| `MMQ_FAKE_API` | off | Offline / e2e: fake client (`1`/`true`) |
 
-After changing config, restart the client and have the agent use the tools (`ask_mistral`, `get_queue_status`; pass `model` when needed).
+Other knobs (`MMQ_MAX_WAIT_TIME`, `MMQ_MAX_RETRIES`, …) exist for tuning; see `mmq.py`.
 
 ### MCP tools
 
@@ -163,6 +217,47 @@ uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
 
 e2e uses `MMQ_FAKE_API=1` and a short `MMQ_BASE_WAIT_TIME` to exercise process boundaries (CLI / MCP stdio).
 For a manual Vibe UI check, see [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
+
+## Example: batch-style use of mmq (`scripts/translate_readme.py`)
+
+Besides the CLI and MCP server, you can call the queue from Python. This repo ships a small sample:
+
+**[`scripts/translate_readme.py`](scripts/translate_readme.py)** — regenerate locale READMEs from the English source via the **same free-tier queue** as `mmq` / `ask_mistral`.
+
+| Idea | Why it fits mmq |
+|------|-----------------|
+| Occasional job | Docs change far less often than chat traffic |
+| Can wait ~31s | ja then fr each take a gated slot |
+| Shared DB | Does not bypass other free-tier clients on the machine |
+| Programmatic API | Uses `execute_mistral_queue_async` + `MistralRequest` |
+
+**Locales workflow:** edit **`README.md` (English) only**; do not hand-maintain `README.ja.md` / `README.fr.md`.
+
+```bash
+export MISTRAL_API_KEY=...
+# optional: TRANSLATE_MODEL=mistral-small-latest
+
+# From a git checkout (imports mmq.py on PYTHONPATH via the script)
+python scripts/translate_readme.py              # → README.ja.md + README.fr.md
+python scripts/translate_readme.py --lang ja    # one language
+python scripts/translate_readme.py --dry-run    # preview, no write
+```
+
+What the sample does:
+
+1. Protects fenced code blocks (line FSM) and inline ``code`` with placeholders  
+2. Enqueues one translation job per language through **`execute_mistral_queue_async`**  
+3. Restores placeholders, fixes the language switcher, validates (e.g. balanced fences)  
+4. Writes outputs atomically  
+
+Use it as a template for other infrequent batch jobs (summaries, structured extraction) that should share the free-tier gate.
+
+## Further docs
+
+ * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Vibe / MCP manual smoke
+ * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — where web search belongs (outside mmq base)
+ * [docs/tasks.md](docs/tasks.md) — backlog
+ * [docs/NOTES.md](docs/NOTES.md) — design notes
 
 ## License
 
