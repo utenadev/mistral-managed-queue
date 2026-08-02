@@ -120,9 +120,11 @@ def get_secure_temp_db_path() -> str:
 
     user = getpass.getuser()
     base_dir = os.path.join(tempfile.gettempdir(), f"mcp_mistral_queue_{user}")
+    # Owner-only directory (NOT world-readable). 0o700 is intentional for a
+    # multi-process coordination DB; 0o644 would be less private.
     os.makedirs(base_dir, mode=0o700, exist_ok=True)
     try:
-        os.chmod(base_dir, 0o700)
+        os.chmod(base_dir, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     except Exception:
         pass
 
@@ -215,18 +217,18 @@ def init_db() -> None:
             """
             )
             
-            # Create api_log table
+            # Create api_log table (static DDL; runtime default applied via INSERT)
             cursor.execute(
-                f"""
+                """
                 CREATE TABLE IF NOT EXISTS api_log (
                     id INTEGER PRIMARY KEY,
                     last_executed_at REAL NOT NULL,
-                    current_wait_time REAL DEFAULT {BASE_WAIT_TIME}
+                    current_wait_time REAL DEFAULT 31.0
                 )
-            """
+                """
             )
             
-            # Initialize api_log with default values
+            # Initialize api_log with current BASE_WAIT_TIME (may be env-overridden)
             cursor.execute(
                 "INSERT OR IGNORE INTO api_log (id, last_executed_at, current_wait_time) VALUES (1, 0.0, ?)",
                 (BASE_WAIT_TIME,),
