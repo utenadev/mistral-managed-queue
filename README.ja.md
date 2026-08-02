@@ -7,7 +7,7 @@
 MCP（Model Context Protocol）サーバーおよびCLIツール。Mistralの無料ティア（約30秒に1リクエスト）を、SQLiteキューを介してローカルおよびマルチプロセス/マルチクライアントの呼び出しを調整します。
 SQLite（WALモード）と非同期キューイングを使用し、1つの処理中タスクでリクエスト開始を間隔を空けて実行します。これはベストエフォートのトラフィック制御であり、公式のSLAではありません。
 
-**パッケージ:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **コンソールスクリプト名:** `mmq`（パッケージ名ではない）· **現在のリリース:** `0.1.0`
+**パッケージ:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **コンソールスクリプト名:** `mmq`（パッケージ名ではない）· **現在のリリース:** `0.1.1`
 
 ## 機能
 

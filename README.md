@@ -7,7 +7,7 @@
 An MCP (Model Context Protocol) server and CLI tool that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
 It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
 
-**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.1.0`
+**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.1.1`
 
 ## Features
 
