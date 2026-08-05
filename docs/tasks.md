@@ -24,6 +24,7 @@
 | ✅ 完了 | A: `get_queue_status` + テスト + 三言語 README | P1 | 2h |
 | ✅ 完了 | C: `--purge` / `--purge-all` / `--purge-id` | P1 | 1.5h |
 | ✅ 完了 | D: PyPI 公開 (`mcp-mistral-queue` 0.1.0) | P1 | 0.5h |
+| ✅ 完了 | E: stdin パイプ対応 (`git diff \| mmq`) | P2 | 0.5h |
 
 ---
 
@@ -96,6 +97,11 @@ _AI Agent の誤作動や大量連投をリセットするための JOB 強制�
 - [x] **`get_queue_status` MCPツールの実装**
 
   - unit + MCP e2e + en/ja/fr README 反映済み
+
+- [x] **stdin パイプ対応** (`git diff | mmq`)
+
+  - `--stdin` フラグ、`-` を prompt 値として指定、または stdin が TTY でない場合に自動読み取り。
+  - `mmq docs list` / `mmq docs show` サブコマンドと同時に追加。
 
 - [ ] **デフォルトモデルの更新**
 
