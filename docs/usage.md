@@ -52,15 +52,12 @@ mmq purge --all          # Cancel all pending and processing tasks
 mmq purge --id 42        # Cancel specific task by ID
 ```
 
-### Pipe stdin (e.g. generate commit message from a diff)
+### Pipe stdin to generate a commit message from a diff
 
 ```bash
-# Pipe diff output directly into mmq
 git diff | mmq
 git diff | mmq -
 git diff | mmq --stdin
-
-# With a system prompt to guide the response
 git diff | mmq -s "Generate a concise commit message"
 ```
 

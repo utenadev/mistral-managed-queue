@@ -20,7 +20,7 @@ It uses SQLite (WAL mode) and async queueing with a single in-flight task to spa
  * **Mistral Vibe / Grok / Claude Desktop**: Register as an MCP server (`mmq --mcp`). Do **not** use `vibe mmq.py "..."` — that runs Vibe’s agent CLI, not this tool.
  * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
  * **AI-friendly CLI**: Built for coding agents (Vibe, Claude Code, etc.) with `docs list` / `docs show` subcommands, agent guidance in help text, and JSON outputs for easy parsing.
- * **Stdin pipe support**: Pipe data directly into `mmq` (e.g. `git diff | mmq`) for commit messages, summaries, or any batch prompt.
+ * **Stdin pipe support**: Pipe `git diff` output directly into `mmq` to generate commit messages.
 
 ## Prerequisites
 
@@ -93,7 +93,7 @@ mmq purge --pending   # cancel all pending tasks
 mmq purge --all       # cancel all pending + processing tasks
 mmq purge --id 42     # cancel specific task by ID
 
-# Pipe stdin (e.g. generate commit message from a diff)
+# Pipe stdin to generate a commit message from a diff
 git diff | mmq
 git diff | mmq -
 git diff | mmq --stdin
