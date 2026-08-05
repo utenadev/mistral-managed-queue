@@ -802,10 +802,16 @@ def start_mcp_server() -> None:
 
 async def run_cli(args) -> int:
     """Run in CLI mode."""
+    prompt = args.prompt
+    if args.stdin or prompt == "-":
+        prompt = sys.stdin.read()
+    elif prompt is None and args.messages is None and not sys.stdin.isatty():
+        prompt = sys.stdin.read()
+    
     messages = parse_messages_json(args.messages)
     
     req = MistralRequest(
-        prompt=args.prompt,
+        prompt=prompt,
         messages=messages,
         model=args.model,
         system_prompt=args.system_prompt,
@@ -969,6 +975,12 @@ Examples:
   mmq docs list
   mmq docs show usage
 
+  # Pipe stdin (e.g. generate commit message from a diff)
+  git diff | mmq
+  git diff | mmq -
+  git diff | mmq --stdin
+  git diff | mmq -s "Generate a concise commit message"
+
   # MCP server mode (register with Vibe / Claude Desktop / etc.)
   mmq --mcp
   uvx --from mcp-mistral-queue mmq --mcp
@@ -1041,6 +1053,11 @@ Examples:
         "--messages",
         default=None,
         help="Messages array as a JSON string",
+    )
+    main_parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read prompt from stdin (useful for piping: git diff | mmq)",
     )
     
     # Purge commands as subcommand
@@ -1229,6 +1246,7 @@ Examples:
                 self.system_prompt = getattr(args, 'system_prompt', None)
                 self.priority = getattr(args, 'priority', 2)
                 self.messages = getattr(args, 'messages', None)
+                self.stdin = getattr(args, 'stdin', False)
         
         cli_args = CLIArgs(args)
         sys.exit(asyncio.run(run_cli(cli_args)))
