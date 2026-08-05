@@ -52,13 +52,13 @@ mmq purge --all          # Cancel all pending and processing tasks
 mmq purge --id 42        # Cancel specific task by ID
 ```
 
-### Pipe stdin to generate a commit message from a diff
+### Pipe stdin to generate a commit message from staged changes
 
 ```bash
-git diff | mmq
-git diff | mmq -
-git diff | mmq --stdin
-git diff | mmq -s "Generate a concise commit message"
+git diff --staged | mmq
+git diff --staged | mmq -
+git diff --staged | mmq --stdin
+git diff --staged | mmq -s "Generate a concise commit message"
 ```
 
 When no prompt argument is given and stdin is not a TTY (i.e. data is being piped), `mmq` reads from stdin automatically. Use `-` or `--stdin` to be explicit.
