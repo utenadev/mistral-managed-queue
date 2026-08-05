@@ -7,7 +7,7 @@
 An MCP (Model Context Protocol) server and CLI tool that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
 It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
 
-**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.1.1`
+**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.1.2`
 
 ## Features
 
@@ -19,6 +19,7 @@ It uses SQLite (WAL mode) and async queueing with a single in-flight task to spa
  * **PyPI / uvx**: Install once or run ephemerally; entry point is `mmq`.
  * **Mistral Vibe / Grok / Claude Desktop**: Register as an MCP server (`mmq --mcp`). Do **not** use `vibe mmq.py "..."` — that runs Vibe’s agent CLI, not this tool.
  * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
+ * **AI-friendly CLI**: Built for coding agents (Vibe, Claude Code, etc.) with `docs list` / `docs show` subcommands, agent guidance in help text, and JSON outputs for easy parsing.
 
 ## Prerequisites
 
@@ -85,6 +86,40 @@ mmq --messages '[{"role":"system","content":"Strict programmer"},{"role":"user",
 mmq --purge          # cancel all pending
 mmq --purge-all      # cancel pending + processing
 mmq --purge-id 42    # cancel one task by ID
+
+# New structured purge subcommand (recommended for scripts/AI)
+mmq purge --pending   # cancel all pending tasks
+mmq purge --all       # cancel all pending + processing tasks
+mmq purge --id 42     # cancel specific task by ID
+```
+
+### AI-Friendly Documentation Commands
+
+For coding agents (Vibe, Claude Code, etc.):
+
+```bash
+# List all available documentation
+mmq docs list
+
+# Show specific documentation (returns markdown content)
+mmq docs show usage
+mmq docs show install
+mmq docs show mcp
+mmq docs show rate-limit
+mmq docs show troubleshooting
+mmq docs show examples
+```
+
+The `docs list` command outputs JSON with descriptions for easy parsing:
+
+```json
+{
+  "results": [
+    {"name": "usage", "description": "Usage guide and examples for mcp-mistral-queue CLI"},
+    {"name": "install", "description": "Installation instructions for mcp-mistral-queue"}
+  ],
+  "help": "If you are a coding agent, run `mmq docs show {name}` to see details."
+}
 ```
 
 ### 2. MCP server mode (Vibe / Grok / Claude Desktop / …)
@@ -251,6 +286,16 @@ What the sample does:
 4. Writes outputs atomically  
 
 Use it as a template for other infrequent batch jobs (summaries, structured extraction) that should share the free-tier gate.
+
+## Acknowledgments
+
+- **sioois** for sharing information about the Mistral API free tier
+([link](https://zenn.dev/sioois/articles/dea773011514b1)).
+- **@fujibee** for providing insights on using queues with SQLite WAL mode (#agmsg).
+- **shunsuke_suzuki** for the AI-friendly CLI development methodology
+([link](https://zenn.dev/shunsuke_suzuki/articles/make-cli-ai-friendly)).
+
+Thank you all!
 
 ## Further docs
 

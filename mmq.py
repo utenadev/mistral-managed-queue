@@ -11,6 +11,7 @@ import getpass
 import json
 import logging
 import os
+import pathlib
 import sqlite3
 import sys
 import tempfile
@@ -852,90 +853,385 @@ def run_purge(args) -> int:
     return 0
 
 
+# === Documentation Commands (AI-Friendly) ===
+
+DOCS_DIR = pathlib.Path(__file__).parent / "docs"
+
+
+def _parse_frontmatter(content: str) -> dict:
+    """Parse frontmatter from markdown content (description only, no YAML dependency)."""
+    import re
+    
+    match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+    if not match:
+        return {}
+    
+    # Simple key: value parser for frontmatter (no YAML dependency)
+    frontmatter_text = match.group(1)
+    result = {}
+    
+    # Look for description: "value" pattern
+    desc_match = re.search(r'description:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE | re.DOTALL)
+    if desc_match:
+        result["description"] = desc_match.group(1).strip()
+    
+    return result
+
+
+def docs_list_command() -> int:
+    """List all available documentation files."""
+    documents = []
+    
+    if not DOCS_DIR.exists():
+        print(json.dumps({"results": [], "help": "No docs directory found."}))
+        return 0
+    
+    # Files to exclude from documentation listing
+    excluded_files = {
+        "NOTES.md", "tasks.md", "SEARCH_POSITIONING.md", "SMOKE_VIBE.md",
+        "README.md", "REVIEW.md"
+    }
+    
+    for md_file in sorted(DOCS_DIR.glob("*.md")):
+        if md_file.name in excluded_files:
+            # Skip internal docs
+            continue
+            
+        with open(md_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        frontmatter = _parse_frontmatter(content)
+        name = md_file.stem
+        description = frontmatter.get("description", "No description available")
+        
+        documents.append({
+            "name": name,
+            "description": description,
+        })
+    
+    result = {
+        "results": documents,
+        "help": "If you are a coding agent, run `mmq docs show {name}` to see details."
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def docs_show_command(name: str) -> int:
+    """Show the content of a specific documentation file."""
+    md_file = DOCS_DIR / f"{name}.md"
+    
+    if not md_file.exists():
+        print(f"Error: Document '{name}' not found.", file=sys.stderr)
+        print(f"Available documents: Run `mmq docs list`", file=sys.stderr)
+        return 1
+    
+    with open(md_file, "r", encoding="utf-8") as f:
+        content = f.read()
+    
+    print(content)
+    return 0
+
+
 def main():
-    """CLI / MCP entry point."""
+    """CLI / MCP entry point.
+    
+    AI Agent Guidance: If you are a coding agent, use `mmq docs list` to see available
+    documentation, or `mmq docs show <name>` to read specific docs. For API usage,
+    use the MCP tools: ask_mistral, get_queue_status, or purge_tasks.
+    """
+    # Main parser with agent-friendly epilog
     parser = argparse.ArgumentParser(
-        description="Mistral API Queue - CLI mode",
+        description="Mistral API Queue - CLI mode with priority queue and rate limiting",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+AI Agent Guidance:
+  If you are a coding agent (Vibe, Claude Code, etc.):
+  - List available documentation: mmq docs list
+  - Read specific documentation: mmq docs show <name>
+  - For API usage: use MCP tools (ask_mistral, get_queue_status)
+
 Examples:
   # Basic run (CLI)
-  uv run mmq.py "Explain Python briefly"
+  mmq "Explain Python briefly"
+  uvx --from mcp-mistral-queue mmq "Explain Python briefly"
 
   # Choose a model
-  uv run mmq.py -m mistral-large-latest "Explain this algorithm"
+  mmq -m mistral-large-latest "Explain this algorithm"
+  uvx --from mcp-mistral-queue mmq -m mistral-large-latest "Explain this algorithm"
 
   # Emergency brake: cancel queued work
-  uv run mmq.py --purge
-  uv run mmq.py --purge-all
-  uv run mmq.py --purge-id 42
+  mmq --purge
+  mmq --purge-all
+  mmq --purge-id 42
+
+  # Documentation for AI agents
+  mmq docs list
+  mmq docs show usage
 
   # MCP server mode (register with Vibe / Claude Desktop / etc.)
-  uv run mmq.py --mcp
+  mmq --mcp
+  uvx --from mcp-mistral-queue mmq --mcp
 """,
     )
-    parser.add_argument(
-        "prompt",
-        nargs="?",
-        default=None,
-        help="Input prompt text",
-    )
-    parser.add_argument(
-        "-m", "--model",
-        default=DEFAULT_MODEL,
-        help=f"Model name (default: {DEFAULT_MODEL})",
-    )
-    parser.add_argument(
-        "-s", "--system-prompt",
-        default=None,
-        help="System prompt",
-    )
-    parser.add_argument(
-        "--priority",
-        type=int,
-        default=2,
-        choices=[1, 2, 3],
-        help="Task priority (1: high, 2: normal, 3: low) (default: 2)",
-    )
-    parser.add_argument(
-        "--messages",
-        default=None,
-        help="Messages array as a JSON string",
-    )
+    
+    # MCP mode as a flag on main parser
     parser.add_argument(
         "--mcp",
         action="store_true",
-        help="Start in MCP server mode",
+        help="Start in MCP server mode (register with Vibe / Claude Desktop)",
     )
+    
+    # Backward compatibility: legacy purge flags on main parser
     parser.add_argument(
         "--purge",
         action="store_true",
-        help="Cancel all pending tasks (emergency brake)",
+        help="[Legacy] Cancel all pending tasks (use 'purge --pending' instead)",
     )
     parser.add_argument(
         "--purge-all",
         action="store_true",
-        help="Cancel all pending and processing tasks",
+        help="[Legacy] Cancel all pending and processing tasks (use 'purge --all' instead)",
     )
     parser.add_argument(
         "--purge-id",
         type=int,
         default=None,
         metavar="ID",
-        help="Cancel a single task by ID",
+        help="[Legacy] Cancel a specific task by ID (use 'purge --id ID' instead)",
     )
     
-    args = parser.parse_args()
+    # Create subparsers for different command groups
+    subparsers = parser.add_subparsers(
+        title="subcommands",
+        dest="command",
+        help="Available command groups (use 'docs list' for AI-friendly documentation)",
+    )
     
+    # Main CLI command (for explicit usage: mmq main "prompt")
+    main_parser = subparsers.add_parser(
+        "main",
+        help="Run Mistral API with queue and rate limiting (default)",
+        description="Execute Mistral API calls through a priority queue with shared rate limiting",
+    )
+    main_parser.add_argument(
+        "prompt",
+        nargs="?",
+        default=None,
+        help="Input prompt text",
+    )
+    main_parser.add_argument(
+        "-m", "--model",
+        default=DEFAULT_MODEL,
+        help=f"Model name (default: {DEFAULT_MODEL})",
+    )
+    main_parser.add_argument(
+        "-s", "--system-prompt",
+        default=None,
+        help="System prompt",
+    )
+    main_parser.add_argument(
+        "--priority",
+        type=int,
+        default=2,
+        choices=[1, 2, 3],
+        help="Task priority (1: high, 2: normal, 3: low) (default: 2)",
+    )
+    main_parser.add_argument(
+        "--messages",
+        default=None,
+        help="Messages array as a JSON string",
+    )
+    
+    # Purge commands as subcommand
+    purge_parser = subparsers.add_parser(
+        "purge",
+        help="Cancel tasks (emergency brake)",
+        description="Cancel pending or processing tasks. AI agents: use purge_tasks() MCP tool instead.",
+    )
+    purge_group = purge_parser.add_mutually_exclusive_group(required=True)
+    purge_group.add_argument(
+        "--pending",
+        action="store_true",
+        help="Cancel all pending tasks",
+    )
+    purge_group.add_argument(
+        "--all",
+        action="store_true",
+        help="Cancel all pending and processing tasks",
+    )
+    purge_group.add_argument(
+        "--id",
+        type=int,
+        metavar="ID",
+        help="Cancel a specific task by ID",
+    )
+    
+    # Documentation commands for AI agents
+    docs_parser = subparsers.add_parser(
+        "docs",
+        help="Documentation commands (AI-friendly)",
+        description="Access embedded documentation. AI agents: use these commands to understand the tool.",
+    )
+    docs_subparsers = docs_parser.add_subparsers(
+        title="docs_commands",
+        dest="docs_command",
+        help="Documentation subcommands",
+    )
+    
+    # docs list command
+    docs_list_parser = docs_subparsers.add_parser(
+        "list",
+        help="List available documentation",
+        description="List all available documentation files with descriptions. AI agents: use this to discover available docs.",
+    )
+    
+    # docs show command
+    docs_show_parser = docs_subparsers.add_parser(
+        "show",
+        help="Show documentation content",
+        description="Show the content of a specific documentation file. AI agents: use this to read docs.",
+    )
+    docs_show_parser.add_argument(
+        "name",
+        help="Documentation file name (without .md extension)",
+    )
+    
+    # Custom parsing to handle backward compatibility
+    # Check if we have arguments that should be treated as main command
+    # We need to distinguish between:
+    # - mmq.py "prompt" (should be treated as main command with prompt)
+    # - mmq.py --priority 1 "prompt" (should be treated as main command)
+    # - mmq.py purge --pending (should be treated as purge subcommand)
+    # - mmq.py docs list (should be treated as docs subcommand)
+    
+    def should_insert_main():
+        """Check if we should insert 'main' subcommand"""
+        if len(sys.argv) <= 1:
+            return False
+        
+        # Check for legacy flags that should be handled by main parser
+        legacy_flags = ['--purge', '--purge-all', '--purge-id', '--mcp']
+        for arg in sys.argv[1:]:
+            if arg in legacy_flags:
+                # Found a legacy flag, don't insert main
+                return False
+            elif not arg.startswith('-'):
+                # Check if it's a known subcommand
+                known_subcommands = ['purge', 'docs']
+                if arg in known_subcommands:
+                    return False
+                else:
+                    # Found a positional arg that's not a subcommand
+                    return True
+        
+        # All remaining args are other flags, no positional args - no need for main
+        return False
+    
+    # Preprocess: insert 'main' subcommand if needed
+    if should_insert_main():
+        sys.argv.insert(1, 'main')
+    
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        # Handle the case where we have arguments that argparse doesn't understand
+        if "invalid choice" in str(e) or "unrecognized arguments" in str(e):
+            # Try inserting 'main' subcommand
+            original_argv = sys.argv.copy()
+            if 'main' not in sys.argv:
+                sys.argv.insert(1, 'main')
+                try:
+                    args = parser.parse_args()
+                except SystemExit:
+                    # Restore and re-raise original
+                    sys.argv = original_argv
+                    raise
+            else:
+                raise
+        else:
+            raise
+    
+    # Handle MCP mode first
     if args.mcp:
         start_mcp_server()
-    elif args.purge or args.purge_all or args.purge_id is not None:
+    
+    # Handle docs commands
+    if hasattr(args, 'docs_command'):
+        if args.docs_command == 'list':
+            sys.exit(docs_list_command())
+        elif args.docs_command == 'show':
+            sys.exit(docs_show_command(args.name))
+    
+    # Handle purge subcommand
+    if hasattr(args, 'command') and args.command == 'purge':
+        # Create a purge args namespace compatible with run_purge
+        class PurgeArgs:
+            def __init__(self):
+                self.purge = args.pending
+                self.purge_all = args.all
+                self.purge_id = args.id
+        
+        sys.exit(run_purge(PurgeArgs()))
+    
+    # Handle legacy purge flags (backward compatibility)
+    if (args.purge or args.purge_all or args.purge_id is not None):
+        # Check for conflicting arguments
+        purge_count = sum([
+            args.purge,
+            args.purge_all,
+            args.purge_id is not None
+        ])
+        if purge_count > 1:
+            print(
+                "Error: specify exactly one of --purge, --purge-all, or --purge-id",
+                file=sys.stderr,
+            )
+            sys.exit(2)
         sys.exit(run_purge(args))
-    elif args.prompt is None and args.messages is None:
-        parser.print_help()
-        sys.exit(1)
+    
+    # Handle main CLI execution (default behavior)
+    # For backward compatibility, handle prompt on main parser
+    prompt = None
+    messages = None
+    
+    if hasattr(args, 'command') and args.command == 'main':
+        prompt = args.prompt
+        messages = args.messages
+    elif hasattr(args, 'prompt'):
+        prompt = args.prompt
+        messages = getattr(args, 'messages', None)
+    
+    # If MCP mode was already handled, we won't reach here
+    if prompt is None and messages is None:
+        # Check if this is a case where we need to show help
+        if (hasattr(args, 'command') and args.command == 'main') or \
+           (hasattr(args, 'prompt') and args.prompt is None):
+            parser.print_help()
+            sys.exit(1)
+        else:
+            # This might be a case with legacy flags but no prompt
+            # Check if we have any main CLI arguments
+            if (hasattr(args, 'model') or hasattr(args, 'system_prompt') or 
+                hasattr(args, 'priority') or hasattr(args, 'messages')):
+                parser.print_help()
+                sys.exit(1)
+            else:
+                # No CLI arguments provided
+                parser.print_help()
+                sys.exit(1)
     else:
-        sys.exit(asyncio.run(run_cli(args)))
+        # Create a standardized args object for run_cli
+        class CLIArgs:
+            def __init__(self, args):
+                self.prompt = getattr(args, 'prompt', None)
+                self.model = getattr(args, 'model', DEFAULT_MODEL)
+                self.system_prompt = getattr(args, 'system_prompt', None)
+                self.priority = getattr(args, 'priority', 2)
+                self.messages = getattr(args, 'messages', None)
+        
+        cli_args = CLIArgs(args)
+        sys.exit(asyncio.run(run_cli(cli_args)))
 
 
 if __name__ == "__main__":
