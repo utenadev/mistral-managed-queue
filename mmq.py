@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import Context, FastMCP
 from mistralai import Mistral
 
-# === Constant Configuration (env overrides for tests / local tuning) ===
+# === Constants ===
 
 
 def _env_float(name: str, default: float) -> float:
@@ -61,7 +61,7 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful, and honest assistant."
 DB_CONNECT_TIMEOUT = _env_float("MMQ_DB_CONNECT_TIMEOUT", 30.0)
 DB_SHORT_TIMEOUT = _env_float("MMQ_DB_SHORT_TIMEOUT", 10.0)
 
-# === Logging Setup ===
+# === Logging ===
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] [%(levelname)s] %(message)s",
@@ -242,14 +242,7 @@ def init_db() -> None:
 
 
 def clean_zombie_tasks() -> int:
-    """Clean up zombie tasks that are stuck in processing state.
-    
-    Args:
-        None
-        
-    Returns:
-        Number of tasks cleaned up
-    """
+    """Reset stale ``processing`` tasks to ``failed`` after the timeout."""
     try:
         cutoff = time.time() - PROCESSING_TIMEOUT
         with sqlite3.connect(TEMP_DB_PATH, timeout=DB_SHORT_TIMEOUT) as conn:
@@ -275,14 +268,7 @@ def clean_zombie_tasks() -> int:
 # === Helper Functions for Task Management ===
 
 async def register_task(req: MistralRequest) -> int:
-    """Register a new task in the queue.
-    
-    Args:
-        req: MistralRequest containing task parameters
-        
-    Returns:
-        The assigned task ID
-    """
+    """Insert a new row and return the assigned task ID."""
     await asyncio.to_thread(clean_zombie_tasks)
     summary = (
         (req.prompt or "")[:30]
@@ -308,11 +294,10 @@ async def register_task(req: MistralRequest) -> int:
 
 
 async def claim_task(task_id: int) -> bool:
-    """Try to claim a task for exclusive processing (single in-flight).
+    """Claim a task for exclusive processing (single in-flight).
 
-    A task may be claimed only when:
-    1. No other task is currently ``processing``, and
-    2. This task is the head of the pending queue (priority ASC, id ASC).
+    A task may be claimed only when no other task is ``processing``
+    and this task is the head of the pending queue (priority ASC, id ASC).
     """
     def _do_claim():
         with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
@@ -352,7 +337,7 @@ async def claim_task(task_id: int) -> bool:
 
 
 async def touch_task(task_id: int) -> None:
-    """Heartbeat: refresh updated_at so zombie cleanup does not kill live work."""
+    """Heartbeat: refresh ``updated_at`` so zombie cleanup does not kill live work."""
 
     def _do_touch():
         with sqlite3.connect(TEMP_DB_PATH, timeout=DB_SHORT_TIMEOUT) as conn:
@@ -367,10 +352,10 @@ async def touch_task(task_id: int) -> None:
 
 
 async def wait_for_rate_limit() -> tuple[bool, float, float]:
-    """Wait for rate limit to allow API call.
-    
+    """Wait until the shared rate-limit gate grants a slot.
+
     Returns:
-        Tuple of (ready: bool, sleep_needed: float, current_wait_time: float)
+        ``(ready, sleep_needed, current_wait_time)``
     """
     def _check_limit():
         with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
@@ -438,19 +423,12 @@ async def update_rate_limit_wait_time(
 
 
 async def reset_rate_limit_wait_time() -> None:
-    """Reset the rate limit wait time to base value."""
+    """Reset the rate limit wait time to ``BASE_WAIT_TIME``."""
     await update_rate_limit_wait_time(BASE_WAIT_TIME)
 
 
 def is_rate_limit_error(error: Exception) -> bool:
-    """Check if the error is a rate limit (429) error.
-    
-    Args:
-        error: The exception to check
-        
-    Returns:
-        True if it's a rate limit error
-    """
+    """Check if the error is a rate limit (429) error."""
     error_str = str(error).lower()
     return any(keyword in error_str for keyword in ["429", "rate limit", "too many requests"])
 
@@ -559,13 +537,7 @@ async def update_task_status(
     status: str,
     result: Optional[str] = None,
 ) -> None:
-    """Update task status in the database.
-    
-    Args:
-        task_id: The task ID to update
-        status: New status ('pending', 'processing', 'completed', 'failed', 'cancelled')
-        result: Optional result text
-    """
+    """Update task status in the database."""
     def _do_update():
         with sqlite3.connect(TEMP_DB_PATH, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
@@ -698,20 +670,7 @@ async def ask_mistral(
     system_prompt: Optional[str] = None,
     priority: int = 2,
 ) -> str:
-    """Call the Mistral API with queuing and shared rate-limit control.
-
-    Args:
-        ctx: MCP context (injected automatically by the host).
-        prompt: Single-shot user prompt text.
-        messages: Conversation history
-            (``[{"role": "...", "content": "..."}]``).
-        model: Mistral model name (default: ``mistral-small-latest``).
-        system_prompt: Custom system prompt (only used with ``prompt``).
-        priority: Task priority (1: high, 2: normal, 3: low).
-
-    Returns:
-        Response text from the Mistral API.
-    """
+    """Call the Mistral API with queuing and shared rate-limit control."""
     req = MistralRequest(
         prompt=prompt,
         messages=messages,
@@ -724,15 +683,7 @@ async def ask_mistral(
 
 @mcp.tool()
 async def get_queue_status() -> str:
-    """Return current shared queue and rate-limit status as JSON.
-
-    Fields:
-        pending: tasks waiting in the queue
-        processing: tasks currently claimed / running
-        seconds_until_next_slot: seconds until the shared API gate opens
-        current_wait_interval: active shared wait interval in seconds
-        in_flight: whether any task is currently processing
-    """
+    """Return queue and rate-limit state as JSON."""
     status = await asyncio.to_thread(read_queue_status)
     return json.dumps(status)
 
@@ -807,9 +758,9 @@ async def run_cli(args) -> int:
         prompt = sys.stdin.read()
     elif prompt is None and args.messages is None and not sys.stdin.isatty():
         prompt = sys.stdin.read()
-    
+
     messages = parse_messages_json(args.messages)
-    
+
     req = MistralRequest(
         prompt=prompt,
         messages=messages,
@@ -817,7 +768,7 @@ async def run_cli(args) -> int:
         system_prompt=args.system_prompt,
         priority=args.priority,
     )
-    
+
     try:
         result = await execute_mistral_queue_async(req)
         print(result)
@@ -939,14 +890,8 @@ def docs_show_command(name: str) -> int:
     return 0
 
 
-def main():
-    """CLI / MCP entry point.
-    
-    AI Agent Guidance: If you are a coding agent, use `mmq docs list` to see available
-    documentation, or `mmq docs show <name>` to read specific docs. For API usage,
-    use the MCP tools: ask_mistral, get_queue_status, or purge_tasks.
-    """
-    # Main parser with agent-friendly epilog
+def _build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser."""
     parser = argparse.ArgumentParser(
         description="Mistral API Queue - CLI mode with priority queue and rate limiting",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -975,26 +920,23 @@ Examples:
   mmq docs list
   mmq docs show usage
 
-  # Pipe stdin (e.g. generate commit message from a diff)
-  git diff | mmq
-  git diff | mmq -
-  git diff | mmq --stdin
-  git diff | mmq -s "Generate a concise commit message"
+  # Pipe stdin (e.g. generate commit message from staged changes)
+  git diff --staged | mmq
+  git diff --staged | mmq -
+  git diff --staged | mmq --stdin
+  git diff --staged | mmq -s "Generate a concise commit message"
 
   # MCP server mode (register with Vibe / Claude Desktop / etc.)
   mmq --mcp
   uvx --from mcp-mistral-queue mmq --mcp
 """,
     )
-    
-    # MCP mode as a flag on main parser
+
     parser.add_argument(
         "--mcp",
         action="store_true",
         help="Start in MCP server mode (register with Vibe / Claude Desktop)",
     )
-    
-    # Backward compatibility: legacy purge flags on main parser
     parser.add_argument(
         "--purge",
         action="store_true",
@@ -1012,15 +954,13 @@ Examples:
         metavar="ID",
         help="[Legacy] Cancel a specific task by ID (use 'purge --id ID' instead)",
     )
-    
-    # Create subparsers for different command groups
+
     subparsers = parser.add_subparsers(
         title="subcommands",
         dest="command",
         help="Available command groups (use 'docs list' for AI-friendly documentation)",
     )
-    
-    # Main CLI command (for explicit usage: mmq main "prompt")
+
     main_parser = subparsers.add_parser(
         "main",
         help="Run Mistral API with queue and rate limiting (default)",
@@ -1057,10 +997,9 @@ Examples:
     main_parser.add_argument(
         "--stdin",
         action="store_true",
-        help="Read prompt from stdin (useful for piping: git diff | mmq)",
+        help="Read prompt from stdin (useful for piping: git diff --staged | mmq)",
     )
-    
-    # Purge commands as subcommand
+
     purge_parser = subparsers.add_parser(
         "purge",
         help="Cancel tasks (emergency brake)",
@@ -1083,8 +1022,7 @@ Examples:
         metavar="ID",
         help="Cancel a specific task by ID",
     )
-    
-    # Documentation commands for AI agents
+
     docs_parser = subparsers.add_parser(
         "docs",
         help="Documentation commands (AI-friendly)",
@@ -1095,110 +1033,81 @@ Examples:
         dest="docs_command",
         help="Documentation subcommands",
     )
-    
-    # docs list command
-    docs_list_parser = docs_subparsers.add_parser(
+
+    docs_subparsers.add_parser(
         "list",
         help="List available documentation",
-        description="List all available documentation files with descriptions. AI agents: use this to discover available docs.",
+        description="List all available documentation files with descriptions.",
     )
-    
-    # docs show command
+
     docs_show_parser = docs_subparsers.add_parser(
         "show",
         help="Show documentation content",
-        description="Show the content of a specific documentation file. AI agents: use this to read docs.",
+        description="Show the content of a specific documentation file.",
     )
     docs_show_parser.add_argument(
         "name",
         help="Documentation file name (without .md extension)",
     )
-    
-    # Custom parsing to handle backward compatibility
-    # Check if we have arguments that should be treated as main command
-    # We need to distinguish between:
-    # - mmq.py "prompt" (should be treated as main command with prompt)
-    # - mmq.py --priority 1 "prompt" (should be treated as main command)
-    # - mmq.py purge --pending (should be treated as purge subcommand)
-    # - mmq.py docs list (should be treated as docs subcommand)
-    
-    def should_insert_main():
-        """Check if we should insert 'main' subcommand"""
+
+    return parser
+
+
+def _resolve_args(parser: argparse.ArgumentParser) -> argparse.Namespace:
+    """Parse argv with backward-compatible fallback for missing subcommand."""
+
+    def _should_insert_main() -> bool:
         if len(sys.argv) <= 1:
             return False
-        
-        # Check for legacy flags that should be handled by main parser
-        legacy_flags = ['--purge', '--purge-all', '--purge-id', '--mcp']
+        legacy_flags = {"--purge", "--purge-all", "--purge-id", "--mcp"}
         for arg in sys.argv[1:]:
             if arg in legacy_flags:
-                # Found a legacy flag, don't insert main
                 return False
-            elif not arg.startswith('-'):
-                # Check if it's a known subcommand
-                known_subcommands = ['purge', 'docs']
-                if arg in known_subcommands:
-                    return False
-                else:
-                    # Found a positional arg that's not a subcommand
-                    return True
-        
-        # All remaining args are other flags, no positional args - no need for main
+            if not arg.startswith("-"):
+                return arg not in {"purge", "docs"}
         return False
-    
-    # Preprocess: insert 'main' subcommand if needed
-    if should_insert_main():
-        sys.argv.insert(1, 'main')
-    
+
+    if _should_insert_main():
+        sys.argv.insert(1, "main")
+
     try:
-        args = parser.parse_args()
+        return parser.parse_args()
     except SystemExit as e:
-        # Handle the case where we have arguments that argparse doesn't understand
         if "invalid choice" in str(e) or "unrecognized arguments" in str(e):
-            # Try inserting 'main' subcommand
             original_argv = sys.argv.copy()
-            if 'main' not in sys.argv:
-                sys.argv.insert(1, 'main')
+            if "main" not in sys.argv:
+                sys.argv.insert(1, "main")
                 try:
-                    args = parser.parse_args()
+                    return parser.parse_args()
                 except SystemExit:
-                    # Restore and re-raise original
                     sys.argv = original_argv
                     raise
-            else:
-                raise
-        else:
             raise
-    
-    # Handle MCP mode first
+        raise
+
+
+def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Route parsed args to the appropriate handler and exit."""
     if args.mcp:
         start_mcp_server()
-    
-    # Handle docs commands
-    if hasattr(args, 'docs_command'):
-        if args.docs_command == 'list':
+
+    if hasattr(args, "docs_command"):
+        if args.docs_command == "list":
             sys.exit(docs_list_command())
-        elif args.docs_command == 'show':
+        elif args.docs_command == "show":
             sys.exit(docs_show_command(args.name))
-    
-    # Handle purge subcommand
-    if hasattr(args, 'command') and args.command == 'purge':
-        # Create a purge args namespace compatible with run_purge
-        class PurgeArgs:
-            def __init__(self):
+
+    if hasattr(args, "command") and args.command == "purge":
+        class _PurgeArgs:
+            def __init__(self) -> None:
                 self.purge = args.pending
                 self.purge_all = args.all
                 self.purge_id = args.id
-        
-        sys.exit(run_purge(PurgeArgs()))
-    
-    # Handle legacy purge flags (backward compatibility)
-    if (args.purge or args.purge_all or args.purge_id is not None):
-        # Check for conflicting arguments
-        purge_count = sum([
-            args.purge,
-            args.purge_all,
-            args.purge_id is not None
-        ])
+
+        sys.exit(run_purge(_PurgeArgs()))
+
+    if args.purge or args.purge_all or args.purge_id is not None:
+        purge_count = sum([args.purge, args.purge_all, args.purge_id is not None])
         if purge_count > 1:
             print(
                 "Error: specify exactly one of --purge, --purge-all, or --purge-id",
@@ -1206,50 +1115,39 @@ Examples:
             )
             sys.exit(2)
         sys.exit(run_purge(args))
-    
-    # Handle main CLI execution (default behavior)
-    # For backward compatibility, handle prompt on main parser
+
     prompt = None
     messages = None
-    
-    if hasattr(args, 'command') and args.command == 'main':
+
+    if hasattr(args, "command") and args.command == "main":
         prompt = args.prompt
         messages = args.messages
-    elif hasattr(args, 'prompt'):
+    elif hasattr(args, "prompt"):
         prompt = args.prompt
-        messages = getattr(args, 'messages', None)
-    
-    # If MCP mode was already handled, we won't reach here
+        messages = getattr(args, "messages", None)
+
     if prompt is None and messages is None:
-        # Check if this is a case where we need to show help
-        if (hasattr(args, 'command') and args.command == 'main') or \
-           (hasattr(args, 'prompt') and args.prompt is None):
+        if (hasattr(args, "command") and args.command == "main") or (
+            hasattr(args, "prompt") and args.prompt is None
+        ):
             parser.print_help()
             sys.exit(1)
-        else:
-            # This might be a case with legacy flags but no prompt
-            # Check if we have any main CLI arguments
-            if (hasattr(args, 'model') or hasattr(args, 'system_prompt') or 
-                hasattr(args, 'priority') or hasattr(args, 'messages')):
-                parser.print_help()
-                sys.exit(1)
-            else:
-                # No CLI arguments provided
-                parser.print_help()
-                sys.exit(1)
-    else:
-        # Create a standardized args object for run_cli
-        class CLIArgs:
-            def __init__(self, args):
-                self.prompt = getattr(args, 'prompt', None)
-                self.model = getattr(args, 'model', DEFAULT_MODEL)
-                self.system_prompt = getattr(args, 'system_prompt', None)
-                self.priority = getattr(args, 'priority', 2)
-                self.messages = getattr(args, 'messages', None)
-                self.stdin = getattr(args, 'stdin', False)
-        
-        cli_args = CLIArgs(args)
-        sys.exit(asyncio.run(run_cli(cli_args)))
+        if hasattr(args, "model") or hasattr(args, "system_prompt") or hasattr(
+            args, "priority"
+        ) or hasattr(args, "messages"):
+            parser.print_help()
+            sys.exit(1)
+        parser.print_help()
+        sys.exit(1)
+
+    sys.exit(asyncio.run(run_cli(args)))
+
+
+def main() -> None:
+    """CLI / MCP entry point."""
+    parser = _build_parser()
+    args = _resolve_args(parser)
+    _dispatch(args, parser)
 
 
 if __name__ == "__main__":
