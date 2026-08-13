@@ -2,7 +2,7 @@
 
 ## Project
 
-`mcp-mistral-queue` — Python MCP server + CLI that queues Mistral API calls with
+`mistral-managed-queue` — Python MCP server + CLI that queues Mistral API calls with
 rate limiting (free-tier ~1 req/30s) via SQLite (WAL mode). Package layout under
 `mmq/`. Console script: `mmq` (`mmq.cli:main`).
 
@@ -103,8 +103,8 @@ uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
 
 ## Gotchas
 
-- **Console script name is `mmq`**, not `mcp-mistral-queue`. Wrong: `uvx mcp-mistral-queue --mcp`.
-  Right: `uvx --from mcp-mistral-queue mmq --mcp`.
+- **Console script name is `mmq`**, not `mistral-managed-queue`. Wrong: `uvx mistral-managed-queue --mcp`.
+  Right: `uvx --from mistral-managed-queue mmq --mcp`.
 - **There is no `mmq.py`** anymore — the app is the `mmq/` package. Run with
   `uv run mmq ...` or `python -m mmq.cli ...`. `uv run mmq.py` no longer works.
 - **`write_catalog_yaml(path, document)`** — `path` first. The CLI `catalog fetch`
@@ -125,3 +125,12 @@ uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
 - pytest `asyncio_mode = "auto"`; markers `e2e`, `live`.
 - Key regression suites: `TestExecuteQueueConcurrent` (H1/H2 no-deadlock),
   `TestClaimNextTask` (worker priority ordering), `TestCliWiring` (adversarial-review fixes).
+
+
+<claude-mem-context>
+# Memory Context
+
+# [mistral-managed-queue] recent context, 2026-08-13 10:28pm GMT+9
+
+No previous sessions found.
+</claude-mem-context>

@@ -1,4 +1,4 @@
-"""Tests for mcp-mistral-queue core functionality."""
+"""Tests for mistral-managed-queue core functionality."""
 
 import os
 import asyncio
@@ -567,8 +567,8 @@ class TestHelperFunctions:
     def test_get_secure_temp_db_path(self):
         """Test secure temp DB path generation."""
         path = get_secure_temp_db_path()
-        assert path.endswith("mcp_mistral_flow_control.db")
-        assert "mcp_mistral_queue_" in path
+        assert path.endswith("mistral_managed_flow_control.db")
+        assert "mistral_managed_queue_" in path
 
 
 # =============================================================================

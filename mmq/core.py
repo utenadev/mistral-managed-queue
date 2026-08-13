@@ -31,7 +31,7 @@ from .db import (
     reset_rate_limit_wait_time,
 )
 
-logger = logging.getLogger("mcp-mistral-queue")
+logger = logging.getLogger("mistral-managed-queue")
 
 # ---- Env var helpers ----
 def _fake_api_enabled() -> bool:

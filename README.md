@@ -1,13 +1,13 @@
-# mcp-mistral-queue
+# mistral-managed-queue
 
 [English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)
 
-[![PyPI](https://img.shields.io/pypi/v/mcp-mistral-queue)](https://pypi.org/project/mcp-mistral-queue/)
+[![PyPI](https://img.shields.io/pypi/v/mistral-managed-queue)](https://pypi.org/project/mistral-managed-queue/)
 
 A CLI tool and MCP (Model Context Protocol) server that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
 It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
 
-**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.2.0`
+**Package:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.2.0`
 
 ## Features
 
@@ -32,15 +32,15 @@ export MISTRAL_API_KEY="your-mistral-api-key"
 
 ## Install (PyPI)
 
-Published and verified on [PyPI](https://pypi.org/project/mcp-mistral-queue/).
+Published and verified on [PyPI](https://pypi.org/project/mistral-managed-queue/).
 
 ```bash
 # One-shot (no permanent install) — recommended for MCP hosts
-uvx --from mcp-mistral-queue mmq --help
+uvx --from mistral-managed-queue mmq --help
 
 # Or install into an environment
-uv pip install mcp-mistral-queue
-# pip install mcp-mistral-queue
+uv pip install mistral-managed-queue
+# pip install mistral-managed-queue
 
 mmq --help
 ```
@@ -48,12 +48,12 @@ mmq --help
 **Quick smoke (needs `MISTRAL_API_KEY`; counts against free-tier quota):**
 
 ```bash
-uvx --from mcp-mistral-queue mmq ask "Reply with pong only."
+uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 ```
 
 **Notes:**
 
- * Console script name is **`mmq`**. Wrong: `uvx mcp-mistral-queue ...`. Right: `uvx --from mcp-mistral-queue mmq ...`.
+ * Console script name is **`mmq`**. Wrong: `uvx mistral-managed-queue ...`. Right: `uvx --from mistral-managed-queue mmq ...`.
  * Dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`, `httpx>=0.25.0`, `PyYAML>=6.0` (pulled in by the package).
 
 ## Usage
@@ -66,7 +66,7 @@ Sends the prompt to the Mistral API immediately and prints the response.
 
 ```bash
 # Basic run (default model: mistral-small-latest)
-uvx --from mcp-mistral-queue mmq ask "Explain Python list comprehensions briefly"
+uvx --from mistral-managed-queue mmq ask "Explain Python list comprehensions briefly"
 # or: mmq ask "Explain Python list comprehensions briefly"
 
 # Choose a model (e.g. mistral-large-latest, codestral-latest)
@@ -150,9 +150,9 @@ MCP is **opt-in**: set `MMQ_ENABLE_MCP=true` (values: `1` / `true` / `yes` / `on
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "uvx",
-      "args": ["--from", "mcp-mistral-queue", "mmq", "mcp", "run"],
+      "args": ["--from", "mistral-managed-queue", "mmq", "mcp", "run"],
       "env": {
         "MMQ_ENABLE_MCP": "true",
         "MISTRAL_API_KEY": "your-mistral-api-key"
@@ -167,7 +167,7 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "mmq",
       "args": ["mcp", "run"],
       "env": {
@@ -184,7 +184,7 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "uv",
       "args": [
         "run",
@@ -254,7 +254,7 @@ Returns current shared queue status as JSON:
 
 The coordination temp DB is stored in a per-user directory created with mode `0700`:
 
- * Default: `<tempdir>/mcp_mistral_queue_<USER>/mcp_mistral_flow_control.db`  
+ * Default: `<tempdir>/mistral_managed_queue_<USER>/mistral_managed_flow_control.db`  
    (`tempfile.gettempdir()`, often `/tmp` on Linux)
  * Override: set `MMQ_TEMP_DB_PATH` to a full file path (parent dir is created with `0700`)
 

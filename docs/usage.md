@@ -1,10 +1,10 @@
 ---
-description: Usage guide and examples for mcp-mistral-queue CLI
+description: Usage guide and examples for mistral-managed-queue CLI
 ---
 
 # Usage Guide
 
-`mcp-mistral-queue` provides a command-line interface and MCP server for making Mistral API calls with intelligent queuing and rate limiting.
+`mistral-managed-queue` provides a command-line interface and MCP server for making Mistral API calls with intelligent queuing and rate limiting.
 
 ## Basic CLI Usage
 
@@ -70,7 +70,7 @@ When no prompt argument is given and stdin is not a TTY (i.e. data is being pipe
 mmq --mcp
 
 # Or using uvx
-uvx mcp-mistral-queue --mcp
+uvx mistral-managed-queue --mcp
 ```
 
 ## Environment Variables

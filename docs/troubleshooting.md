@@ -1,10 +1,10 @@
 ---
-description: Troubleshooting guide for mcp-mistral-queue
+description: Troubleshooting guide for mistral-managed-queue
 ---
 
 # Troubleshooting
 
-Common issues and their solutions when using `mcp-mistral-queue`.
+Common issues and their solutions when using `mistral-managed-queue`.
 
 ## Installation Issues
 
@@ -15,7 +15,7 @@ Common issues and their solutions when using `mcp-mistral-queue`.
 **Solution:**
 ```bash
 # Install required dependencies
-uv pip install mcp-mistral-queue
+uv pip install mistral-managed-queue
 
 # Or install from requirements
 uv pip install mcp[cli] mistralai
@@ -28,13 +28,13 @@ uv pip install mcp[cli] mistralai
 **Solution:**
 ```bash
 # Install globally
-uv pip install mcp-mistral-queue
+uv pip install mistral-managed-queue
 
 # Or run directly
-uvx mcp-mistral-queue
+uvx mistral-managed-queue
 
 # Or use python -m
-python -m mcp_mistral_queue
+python -m mistral_managed_queue
 ```
 
 ## API Issues
@@ -128,11 +128,11 @@ export MMQ_TEMP_DB_PATH="/custom/path/to/db"
 
 ```bash
 # The database is located at:
-# /tmp/mcp_mistral_queue_{username}/mcp_mistral_flow_control.db
+# /tmp/mistral_managed_queue_{username}/mistral_managed_flow_control.db
 
 # You can inspect it with sqlite3
-sqlite3 /tmp/mcp_mistral_queue_$(whoami)/mcp_mistral_flow_control.db ".tables"
-sqlite3 /tmp/mcp_mistral_queue_$(whoami)/mcp_mistral_flow_control.db "SELECT * FROM tasks;"
+sqlite3 /tmp/mistral_managed_queue_$(whoami)/mistral_managed_flow_control.db ".tables"
+sqlite3 /tmp/mistral_managed_queue_$(whoami)/mistral_managed_flow_control.db "SELECT * FROM tasks;"
 ```
 
 ## Testing

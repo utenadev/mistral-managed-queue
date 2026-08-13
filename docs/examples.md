@@ -1,10 +1,10 @@
 ---
-description: Practical examples and use cases for mcp-mistral-queue
+description: Practical examples and use cases for mistral-managed-queue
 ---
 
 # Examples
 
-Practical use cases and examples for `mcp-mistral-queue`.
+Practical use cases and examples for `mistral-managed-queue`.
 
 ## Basic Usage Examples
 
@@ -69,9 +69,9 @@ mmq --purge-all
 # ~/.vibe/config.yaml
 mcp:
   servers:
-    mcp-mistral-queue:
+    mistral-managed-queue:
       command: "uvx"
-      args: ["--from", "mcp-mistral-queue", "mmq", "--mcp"]
+      args: ["--from", "mistral-managed-queue", "mmq", "--mcp"]
 ```
 
 ### Claude Desktop Integration
@@ -79,9 +79,9 @@ mcp:
 ```json
 {
   "mcpServers": {
-    "mcp-mistral-queue": {
+    "mistral-managed-queue": {
       "command": "uvx",
-      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"]
+      "args": ["--from", "mistral-managed-queue", "mmq", "--mcp"]
     }
   }
 }
@@ -147,15 +147,15 @@ RUN pip install uv
 COPY . /app
 WORKDIR /app
 
-RUN uv pip install mcp-mistral-queue
+RUN uv pip install mistral-managed-queue
 
 CMD ["mmq", "--mcp"]
 ```
 
 ```bash
 # Build and run
-docker build -t mcp-mistral-queue .
-docker run -e MISTRAL_API_KEY=your-key mcp-mistral-queue
+docker build -t mistral-managed-queue .
+docker run -e MISTRAL_API_KEY=your-key mistral-managed-queue
 ```
 
 ## Documentation Access Examples
@@ -184,11 +184,11 @@ The `docs list` command returns JSON for easy parsing by AI agents:
   "results": [
     {
       "name": "install",
-      "description": "Installation instructions for mcp-mistral-queue"
+      "description": "Installation instructions for mistral-managed-queue"
     },
     {
       "name": "usage", 
-      "description": "Usage guide and examples for mcp-mistral-queue CLI"
+      "description": "Usage guide and examples for mistral-managed-queue CLI"
     }
   ],
   "help": "If you are a coding agent, run `mmq docs show {name}` to see details."

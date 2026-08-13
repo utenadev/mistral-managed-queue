@@ -1,10 +1,10 @@
 ---
-description: Rate limiting and backoff behavior in mcp-mistral-queue
+description: Rate limiting and backoff behavior in mistral-managed-queue
 ---
 
 # Rate Limiting
 
-`mcp-mistral-queue` implements intelligent rate limiting to handle Mistral API's free tier constraints (approximately 1 request per 30 seconds).
+`mistral-managed-queue` implements intelligent rate limiting to handle Mistral API's free tier constraints (approximately 1 request per 30 seconds).
 
 ## How Rate Limiting Works
 

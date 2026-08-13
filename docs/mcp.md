@@ -1,10 +1,10 @@
 ---
-description: MCP server setup and usage for mcp-mistral-queue
+description: MCP server setup and usage for mistral-managed-queue
 ---
 
 # MCP Server Mode
 
-`mcp-mistral-queue` includes full MCP (Model Context Protocol) server support for integration with AI agents like Vibe, Claude Desktop, and others.
+`mistral-managed-queue` includes full MCP (Model Context Protocol) server support for integration with AI agents like Vibe, Claude Desktop, and others.
 
 ## Available MCP Tools
 
@@ -64,7 +64,7 @@ Add to your Vibe configuration:
 # ~/.vibe/config.yaml
 mcp:
   servers:
-    mcp-mistral-queue:
+    mistral-managed-queue:
       command: "mmq"
       args: ["--mcp"]
 ```
@@ -74,9 +74,9 @@ Or use `uvx`:
 ```yaml
 mcp:
   servers:
-    mcp-mistral-queue:
+    mistral-managed-queue:
       command: "uvx"
-      args: ["--from", "mcp-mistral-queue", "mmq", "--mcp"]
+      args: ["--from", "mistral-managed-queue", "mmq", "--mcp"]
 ```
 
 ### Claude Desktop Configuration
@@ -86,7 +86,7 @@ Add to your Claude Desktop MCP configuration:
 ```json
 {
   "mcpServers": {
-    "mcp-mistral-queue": {
+    "mistral-managed-queue": {
       "command": "mmq",
       "args": ["--mcp"]
     }
@@ -101,7 +101,7 @@ Add to your Claude Desktop MCP configuration:
 mmq --mcp
 
 # Using uvx (recommended for global installation)
-uvx mcp-mistral-queue --mcp
+uvx mistral-managed-queue --mcp
 
 # With specific environment variables
 MISTRAL_API_KEY=your-key mmq --mcp

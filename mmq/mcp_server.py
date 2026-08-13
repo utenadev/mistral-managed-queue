@@ -10,12 +10,12 @@ from typing import Optional
 from mcp.server.fastmcp import Context, FastMCP
 
 # MCP server instance (always created so ``mmq --mcp`` works out of the box)
-mcp = FastMCP("mcp-mistral-queue")
+mcp = FastMCP("mistral-managed-queue")
 
 # Optional HTTP run mode (``mmq mcp run``); override via env var
 _MCP_ENABLED = os.environ.get("MMQ_ENABLE_MCP", "").lower() in ("1", "true", "yes", "on")
 
-logger = logging.getLogger("mcp-mistral-queue")
+logger = logging.getLogger("mistral-managed-queue")
 
 def start_mcp_server_stdio() -> None:
     """Start the MCP server on stdio (used by ``mmq --mcp``)."""

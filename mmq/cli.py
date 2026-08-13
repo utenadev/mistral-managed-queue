@@ -17,7 +17,7 @@ from .mcp_server import start_mcp_server, start_mcp_server_stdio, _MCP_ENABLED
 from .catalog.fetch import fetch_catalog
 from .catalog.write import write_catalog_yaml
 
-logger = logging.getLogger("mcp-mistral-queue")
+logger = logging.getLogger("mistral-managed-queue")
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(

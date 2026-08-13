@@ -53,7 +53,7 @@ Rules:
   e.g. <!-- MMQ_BLOCK_0 -->  (copy unchanged; do not invent or drop any).
 - Keep markdown structure: same heading levels, list markers, table column counts.
 - Do not add a preamble or explanation. Output markdown only.
-- Leave the product name "mcp-mistral-queue" and command "mmq" unchanged.
+- Leave the product name "mistral-managed-queue" and command "mmq" unchanged.
 """
 
 
@@ -178,10 +178,10 @@ def validate_markdown(text: str, _n_blocks: int = 0) -> None:
         raise RuntimeError(f"Unbalanced code fences (``` count={fence_marks})")
     # Source README may document the *wrong* form as a counter-example; do not
     # reject that. Require the correct form to appear at least once.
-    if "uvx --from mcp-mistral-queue mmq" not in text:
+    if "uvx --from mistral-managed-queue mmq" not in text:
         raise RuntimeError(
             "Expected correct entry-point form "
-            "`uvx --from mcp-mistral-queue mmq` missing from output"
+            "`uvx --from mistral-managed-queue mmq` missing from output"
         )
 
 

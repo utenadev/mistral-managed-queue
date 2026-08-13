@@ -1,5 +1,5 @@
 [project]
-name = "mcp-mistral-queue"
+name = "mistral-managed-queue"
 version = "0.2.0"
 description = "MCP server for Mistral API with queueing and rate limiting"
 readme = "README.md"

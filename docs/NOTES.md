@@ -1,4 +1,4 @@
-mcp-mistral-queue 機能検討ログ・バックログ
+mistral-managed-queue 機能検討ログ・バックログ
 
 ## Mistral Vibe / CLI 対応
 

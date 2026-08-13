@@ -1,4 +1,4 @@
-"""mcp-mistral-queue - Mistral API queue with rate limiting.
+"""mistral-managed-queue - Mistral API queue with rate limiting.
 
 This package provides:
 - MCP server for Mistral API with priority queue and rate limiting

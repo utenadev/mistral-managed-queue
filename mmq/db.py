@@ -24,7 +24,7 @@ from .config import (
     DB_SHORT_TIMEOUT,
 )
 
-logger = logging.getLogger("mcp-mistral-queue")
+logger = logging.getLogger("mistral-managed-queue")
 
 # Temp DB path
 def get_secure_temp_db_path() -> str:
@@ -39,7 +39,7 @@ def get_secure_temp_db_path() -> str:
         return override
 
     user = getpass.getuser()
-    base_dir = os.path.join(tempfile.gettempdir(), f"mcp_mistral_queue_{user}")
+    base_dir = os.path.join(tempfile.gettempdir(), f"mistral_managed_queue_{user}")
     # Owner-only directory (NOT world-readable). 0o700 is intentional for a
     # multi-process coordination DB; 0o644 would be less private.
     os.makedirs(base_dir, mode=0o700, exist_ok=True)
@@ -48,7 +48,7 @@ def get_secure_temp_db_path() -> str:
     except Exception:
         pass
 
-    return os.path.join(base_dir, "mcp_mistral_flow_control.db")
+    return os.path.join(base_dir, "mistral_managed_flow_control.db")
 
 TEMP_DB_PATH = get_secure_temp_db_path()
 

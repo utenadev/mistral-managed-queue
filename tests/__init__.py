@@ -1,1 +1,1 @@
-# Tests for mcp-mistral-queue
+# Tests for mistral-managed-queue

@@ -12,14 +12,14 @@ This runbook is for verifying the real **Vibe (or Claude Desktop) → MCP → mm
 
 ### Recommended (PyPI)
 
-Console script is **`mmq`** (package name is `mcp-mistral-queue`):
+Console script is **`mmq`** (package name is `mistral-managed-queue`):
 
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "uvx",
-      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
+      "args": ["--from", "mistral-managed-queue", "mmq", "--mcp"],
       "env": {
         "MISTRAL_API_KEY": "your-mistral-api-key"
       }
@@ -28,14 +28,14 @@ Console script is **`mmq`** (package name is `mcp-mistral-queue`):
 }
 ```
 
-Quick CLI check: `uvx --from mcp-mistral-queue mmq --help`
+Quick CLI check: `uvx --from mistral-managed-queue mmq --help`
 
 ### Local checkout (development)
 
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "uv",
       "args": [
         "run",
@@ -44,7 +44,7 @@ Quick CLI check: `uvx --from mcp-mistral-queue mmq --help`
         "--with",
         "mistralai>=1.0.0,<2",
         "--no-project",
-        "/absolute/path/to/mcp-mistral-queue/mmq.py",
+        "/absolute/path/to/mistral-managed-queue/mmq.py",
         "--mcp"
       ],
       "env": {

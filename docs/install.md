@@ -1,10 +1,10 @@
 ---
-description: Installation instructions for mcp-mistral-queue
+description: Installation instructions for mistral-managed-queue
 ---
 
 # Installation
 
-`mcp-mistral-queue` is a CLI tool and MCP server for managing Mistral API calls with priority queuing and rate limiting.
+`mistral-managed-queue` is a CLI tool and MCP server for managing Mistral API calls with priority queuing and rate limiting.
 
 ## Prerequisites
 
@@ -18,24 +18,24 @@ description: Installation instructions for mcp-mistral-queue
 
 ```bash
 # Install globally
-uv pip install mcp-mistral-queue
+uv pip install mistral-managed-queue
 
 # Or run directly without installation
-uvx --from mcp-mistral-queue mmq
+uvx --from mistral-managed-queue mmq
 ```
 
 ### Using pip
 
 ```bash
-pip install mcp-mistral-queue
+pip install mistral-managed-queue
 ```
 
 ### From source
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/mcp-mistral-queue.git
-cd mcp-mistral-queue
+git clone https://github.com/utenadev/mistral-managed-queue.git
+cd mistral-managed-queue
 
 # Install in development mode
 uv pip install -e .

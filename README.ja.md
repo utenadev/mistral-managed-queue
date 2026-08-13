@@ -1,25 +1,24 @@
-# mcp-mistral-queue
+# mistral-managed-queue
 
 [English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)
 
-[![PyPI](https://img.shields.io/pypi/v/mcp-mistral-queue)](https://pypi.org/project/mcp-mistral-queue/)
+[![PyPI](https://img.shields.io/pypi/v/mistral-managed-queue)](https://pypi.org/project/mistral-managed-queue/)
 
-MCP（Model Context Protocol）サーバーおよびCLIツール。SQLite共有キューを介して、Mistral無料プラン（約30秒に1リクエスト）へのローカルおよびマルチプロセス/マルチクライアント呼び出しを調整します。
+CLIツールおよびMCP（Model Context Protocol）サーバーで、SQLite共有キューを介してMistral無料プラン（約30秒に1リクエスト）へのローカルおよびマルチプロセス/マルチクライアント呼び出しを調整します。
 SQLite（WALモード）と非同期キューイングを使用し、1つの進行中タスクでリクエスト開始を間隔を空けて実行します。これはベストエフォートのトラフィック制御であり、公式のSLAではありません。
 
-**パッケージ:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/)（PyPI） · **コンソールスクリプト名:** `mmq`（パッケージ名ではない） · **現在のリリース:** `0.1.2`
+**パッケージ:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **コンソールスクリプト名:** `mmq`（パッケージ名ではない）· **現在のリリース:** `0.2.0`
 
 ## 機能
 
- * **自動レート制限調整**: 共有の約31秒間隔で開始。429エラー時は共有バックオフ後に再度ゲートに入る。成功時は基本間隔にリセット。
- * **マルチプロセス・優先度制御**: 複数のプロセス/タスクが作業をキューに登録可能。優先度（1-3）と単一進行中処理によりキューが順序付けられる。
- * **柔軟なモデル・メッセージオプション**: Mistralのチャットモデル名（デフォルトは`mistral-small-latest`。例: `mistral-large-latest`、`codestral-latest`）と、`messages`配列による完全な会話履歴をサポート。
- * **ストリーミング・キャンセル処理**: Mistral APIレスポンスを内部でストリーミング（ツールは完全なテキストを返却）。クライアントキャンセル時（`CancelledError`）はDB内のタスクステータスを更新。
- * **ローカル制御DB**: パーミッション`0700`のユーザーごとの一時ディレクトリ内にDBを作成（パスは`MMQ_TEMP_DB_PATH`で上書き可能）。
+ * **自動レート制限調整**: 共有の約31秒間隔で開始。429エラー時に共有バックオフを実行し、再度ゲートに入る。成功時には基本の間隔にリセット。
+ * **マルチプロセス・優先度制御**: 複数のプロセス/タスクが作業をキューに登録可能。優先度（デフォルト2。値が大きいほど先に処理）と単一の進行中タスクによりキューが並べられる。
+ * **柔軟なモデル・メッセージオプション**: Mistralのチャットモデル名（デフォルトは`mistral-small-latest`。例: `mistral-large-latest`、`codestral-latest`）。
+ * **ストリーミング・キャンセル処理**: Mistral APIレスポンスを内部でストリーミング（ツールは完全なテキストを返す）。クライアントによるキャンセル（`CancelledError`）時にタスクステータスをDBで更新。
+ * **ローカル制御DB**: ユーザーごとの一時ディレクトリ下にモード`0700`で作成されるDB（パスは`MMQ_TEMP_DB_PATH`で上書き可能）。
  * **PyPI / uvx**: 一度インストールするか、エフェメラルに実行。エントリポイントは`mmq`。
- * **Mistral Vibe / Grok / Claude Desktop**: MCPサーバーとして登録（`mmq --mcp`）。`vibe mmq.py "..."`は使用しないこと。これはVibeのエージェントCLIであり、このツールではない。
- * **無料プランに最適**: ドキュメント翻訳などの散発的なジョブに適しており、専用のレート制限スタックを消費せずに約31秒間隔で呼び出し可能。
- * **AIフレンドリーなCLI**: Vibe、Claude Codeなどのコーディングエージェント向けに設計。`docs list` / `docs show`サブコマンド、ヘルプテキスト内のエージェント向けガイド、パースしやすいJSON出力を提供。
+ * **カタログ取得**: OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュ（`mmq catalog fetch`で実行。依存関係として`httpx`と`PyYAML`が必要）。
+ * **無料プランに最適**: ドキュメント翻訳などの、専用のレート制限スタックを消費せずに約31秒間隔で待機できるジョブに適しています。
 
 ## 前提条件
 
@@ -34,113 +33,135 @@ export MISTRAL_API_KEY="your-mistral-api-key"
 
 ## インストール（PyPI）
 
-[PyPI](https://pypi.org/project/mcp-mistral-queue/) に公開されており、検証済み。
+[PyPI](https://pypi.org/project/mistral-managed-queue/)で公開・検証済み。
 
 ```bash
 # One-shot (no permanent install) — recommended for MCP hosts
-uvx --from mcp-mistral-queue mmq --help
+uvx --from mistral-managed-queue mmq --help
 
 # Or install into an environment
-uv pip install mcp-mistral-queue
-# pip install mcp-mistral-queue
+uv pip install mistral-managed-queue
+# pip install mistral-managed-queue
 
 mmq --help
 ```
 
 
-**簡易テスト（`MISTRAL_API_KEY`が必要。無料プランの割当を消費）**:
+**簡易テスト（`MISTRAL_API_KEY`が必要。無料プランのクォータ消費あり）**:
 
 ```bash
-uvx --from mcp-mistral-queue mmq "Reply with pong only."
+uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 ```
 
 
-**注意事項**:
- * コンソールスクリプト名は**`mmq`**。誤: `uvx mcp-mistral-queue --mcp`。正: `uvx --from mcp-mistral-queue mmq --mcp`。
- * 依存関係: `mcp[cli]>=1.0.0,<2`、`mistralai>=1.0.0,<2`（パッケージにより自動インストール）。
+**注意**:
+
+ * コンソールスクリプト名は**`mmq`**。誤: `uvx mistral-managed-queue ...`。正: `uvx --from mistral-managed-queue mmq ...`。
+ * 依存関係: `mcp[cli]>=1.0.0,<2`、`mistralai>=1.0.0,<2`、`httpx>=0.25.0`、`PyYAML>=6.0`（パッケージに含まれています）。
 
 ## 使用方法
 
-### 1. CLIモード
+CLIはサブコマンドベース: `mmq ask`、`mmq fetch`、`mmq work`、`mmq purge`、`mmq catalog`、`mmq mcp`。
 
-PyPIインストール後または`uvx`経由で、**`mmq`** を実行。
-Gitチェックアウトからでも`uv run mmq.py ...`（PEP 723）で使用可能。
+### 1. `ask` — 直接API呼び出し（キューをバイパス）
+
+プロンプトを直ちにMistral APIに送信し、レスポンスを出力します。
 
 ```bash
 # Basic run (default model: mistral-small-latest)
-uvx --from mcp-mistral-queue mmq "Explain Python list comprehensions briefly"
-# or: mmq "Explain Python list comprehensions briefly"
+uvx --from mistral-managed-queue mmq ask "Explain Python list comprehensions briefly"
+# or: mmq ask "Explain Python list comprehensions briefly"
 
 # Choose a model (e.g. mistral-large-latest, codestral-latest)
-mmq -m mistral-large-latest "Explain a complex algorithm"
+mmq ask -m mistral-large-latest "Explain a complex algorithm"
 
 # Custom system prompt
-mmq -s "You are an AI that speaks casually." "How is the weather today?"
+mmq ask -s "You are an AI that speaks casually." "How is the weather today?"
 
-# Priority (1: high, 2: normal, 3: low)
-mmq --priority 1 "Urgent question"
-
-# Full conversation context as a messages JSON array
-# (specify either prompt or --messages, not both)
-mmq --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
-
-# Emergency brake: cancel queued / stuck work (no API call)
-mmq --purge          # cancel all pending
-mmq --purge-all      # cancel pending + processing
-mmq --purge-id 42    # cancel one task by ID
-
-# New structured purge subcommand (recommended for scripts/AI)
-mmq purge --pending   # cancel all pending tasks
-mmq purge --all       # cancel all pending + processing tasks
-mmq purge --id 42     # cancel specific task by ID
+# JSON output for easy parsing
+mmq ask -j "What is ownership in Rust?"
 ```
 
 
-### AIフレンドリーなドキュメントコマンド
+### 2. `fetch` — 非同期処理用にキューに登録
 
-Vibe、Claude Codeなどのコーディングエージェント向け:
+プロンプトを共有キューに登録します。**処理はここで行われません** — キューを処理するには`mmq work`を実行してください。
 
 ```bash
-# List all available documentation
-mmq docs list
+# Enqueue with default priority (2)
+mmq fetch "Summarize this document"
 
-# Show specific documentation (returns markdown content)
-mmq docs show usage
-mmq docs show install
-mmq docs show mcp
-mmq docs show rate-limit
-mmq docs show troubleshooting
-mmq docs show examples
+# Choose a model / system prompt / priority
+mmq fetch -m mistral-large-latest -s "Be concise" -p 1 "Translate this to Japanese"
 ```
 
 
-**`docs list`** コマンドはJSON形式で出力され、パースしやすい説明を含む:
+**優先度**: 値が大きいほど先に処理されます（`ORDER BY priority DESC`）。デフォルトは`2`。
 
-```json
-{
-  "results": [
-    {"name": "usage", "description": "Usage guide and examples for mcp-mistral-queue CLI"},
-    {"name": "install", "description": "Installation instructions for mcp-mistral-queue"}
-  ],
-  "help": "If you are a coding agent, run `mmq docs show {name}` to see details."
-}
+### 3. `work` — キューを処理（ワーカーモード）
+
+保留中のタスクを優先度順（高い順。同一優先度内はFIFO）で処理し、各タスクを共有レートゲートを通して実行します。
+
+```bash
+mmq work            # drain all currently pending tasks
+mmq work --once     # process exactly one task and exit
+mmq work --watch    # keep processing new tasks until interrupted (Ctrl-C)
 ```
 
 
-### 2. MCPサーバーモード（Vibe / Grok / Claude Desktop / …）
+### 4. `purge` — キュー内タスクのキャンセル
 
-MCPホストに**`ask_mistral`** と**`get_queue_status`** を公開。
-CLIプロンプトとはパスを分離。
+```bash
+mmq purge --pending   # delete all pending tasks
+mmq purge --all       # delete every task (including completed/failed)
+mmq purge --id 42     # delete a specific task by ID
+```
+
+
+### 5. `catalog fetch` — プロバイダーのモデルカタログを取得
+
+OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュします。依存関係として`httpx`と`PyYAML`が必要です。
+
+```bash
+# Fetch from all enabled providers and write to ./models.yaml (default)
+mmq catalog fetch
+
+# Specify output file
+mmq catalog fetch -o ./my-catalog.yaml
+
+# Skip validation
+mmq catalog fetch --no-validate
+```
+
+
+カタログ取得は独自のレート制限を使用し、チャットAPIとは独立して`MMQ_CATALOG_BASE_WAIT_TIME`と`MMQ_CATALOG_MAX_WAIT_TIME`で調整されます。未設定時は`MMQ_BASE_WAIT_TIME` / `MMQ_MAX_WAIT_TIME`にフォールバックします。
+
+### 6. `mcp` — MCPサーバー制御
+
+MCPが有効な場合のみ利用可能（`MMQ_ENABLE_MCP=true`を設定）。
+
+```bash
+MMQ_ENABLE_MCP=true mmq mcp run      # start the MCP server
+MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
+```
+
+
+### 7. MCPサーバーモード（Vibe / Grok / Claude Desktop / …）
+
+MCPホストに**`ask_mistral`**と**`get_queue_status`**を公開します。
+
+MCPは**オプション**: ホスト環境で`MMQ_ENABLE_MCP=true`を設定（値: `1` / `true` / `yes` / `on`）、その後`mmq mcp run`を実行します。
 
 #### PyPI / uvx（推奨）
 
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "uvx",
-      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
+      "args": ["--from", "mistral-managed-queue", "mmq", "mcp", "run"],
       "env": {
+        "MMQ_ENABLE_MCP": "true",
         "MISTRAL_API_KEY": "your-mistral-api-key"
       }
     }
@@ -154,10 +175,11 @@ CLIプロンプトとはパスを分離。
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "mmq",
-      "args": ["--mcp"],
+      "args": ["mcp", "run"],
       "env": {
+        "MMQ_ENABLE_MCP": "true",
         "MISTRAL_API_KEY": "your-mistral-api-key"
       }
     }
@@ -171,17 +193,17 @@ CLIプロンプトとはパスを分離。
 ```json
 {
   "mcpServers": {
-    "mistral-queue": {
+    "mistral-managed-queue": {
       "command": "uv",
       "args": [
         "run",
         "--with", "mcp[cli]>=1.0.0,<2",
         "--with", "mistralai>=1.0.0,<2",
         "--no-project",
-        "/absolute/path/to/mmq.py",
-        "--mcp"
+        "python", "-m", "mmq.cli", "mcp", "run"
       ],
       "env": {
+        "MMQ_ENABLE_MCP": "true",
         "MISTRAL_API_KEY": "your-mistral-api-key"
       }
     }
@@ -190,53 +212,61 @@ CLIプロンプトとはパスを分離。
 ```
 
 
-設定変更後はクライアントを再起動。Vibe UIの手動チェックは [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) を参照。
+設定変更後はクライアントを再起動してください。Vibe手動チェックリスト: [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md)。
 
 ### 3. 環境変数（オプション）
 
 | 変数 | デフォルト | 用途 |
 |---|---|---|
 | `MISTRAL_API_KEY` | （必須） | Mistral APIキー |
-| `MMQ_TEMP_DB_PATH` | ユーザーごとのtempdir配下 | 共有キューDBファイルパス |
-| `MMQ_BASE_WAIT_TIME` | `31` | 開始間隔（秒、無料プランペーシング） |
+| `MMQ_TEMP_DB_PATH` | ユーザーごとの一時ディレクトリ下 | 共有キューDBファイルパス |
+| `MMQ_BASE_WAIT_TIME` | `31` | 開始間隔（無料プランペーシング） |
+| `MMQ_MAX_WAIT_TIME` | `300` | 最大バックオフ待機時間 |
+| `MMQ_MIN_SLEEP_INTERVAL` | `2` | リトライ間の最小スリープ時間 |
+| `MMQ_BACKOFF_MULTIPLIER` | `2.0` | 429エラー時のバックオフ倍率 |
+| `MMQ_PROCESSING_TIMEOUT` | `120` | ゾンビタスクタイムアウト（秒） |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | デフォルトモデル名 |
-| `MMQ_FAKE_API` | オフ | オフライン/エンドツーエンドテスト: フェイククライアント（`1`/`true`） |
-
-その他の調整用パラメータ（`MMQ_MAX_WAIT_TIME`、`MMQ_MAX_RETRIES`、…）も存在。詳細は`mmq.py`を参照。
+| `MMQ_ENABLE_MCP` | オフ | MCPサーバー / `mcp`サブコマンドを有効化（`1`/`true`） |
+| `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | カタログ取得ペーシング |
+| `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | カタログ取得最大バックオフ |
+| `MMQ_FAKE_API` | オフ | オフライン / e2e: フェイククライアント（`1`/`true`） |
+| `MMQ_FAKE_RESPONSE` | — | 固定フェイクレスポンストext（テスト用） |
+| `MMQ_FAKE_FAIL` | — | `429`または`error`で障害をシミュレート（テスト用） |
 
 ### MCPツール
 
-サーバー実行中、クライアントは以下のツールを使用可能:
+サーバー実行中は、クライアントが以下のツールを使用できます:
 
 #### `ask_mistral`
 
 | 引数 | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| prompt | string | null | 単発のユーザープロンプトテキスト |
-| messages | array | null | 会話履歴（`[{"role": "...", "content": "..."}]`） |
+| prompt | string | 必須 | ユーザープロンプトテキスト |
 | model | string | `"mistral-small-latest"` | Mistralモデル名 |
-| system_prompt | string | null | カスタムシステムプロンプト（`prompt`使用時のみ） |
-| priority | number | 2 | タスク優先度（1: 高、2: 標準、3: 低） |
+| system_prompt | string | null | カスタムシステムプロンプト |
 
 #### `get_queue_status`
 
-現在の共有キュー・レート制限ステータスをJSONで返却:
+現在の共有キューのステータスをJSONで返します:
 
 | フィールド | 型 | 説明 |
 |---|---|---|
-| pending | number | キュー内の待機タスク数 |
+| pending | number | キュー内の保留タスク数 |
 | processing | number | 現在処理中のタスク数 |
-| seconds_until_next_slot | number | 共有APIゲートが開くまでの秒数 |
-| current_wait_interval | number | アクティブな共有待機間隔（秒） |
-| in_flight | boolean | 現在処理中のタスクがあるかどうか |
+| completed | number | 完了したタスク数 |
+| failed | number | 失敗したタスク数 |
+| total | number | タスク総数 |
+| seconds_until_next_slot | number | レートゲートで次のスロットが許可されるまでの秒数 |
+| current_wait_interval | number | 現在の共有待機間隔（バックオフ後） |
+| in_flight | boolean | いずれかのタスクが現在処理中かどうか |
 
 ## 制御データの保存場所
 
-調整用の一時DBは、パーミッション`0700`で作成されるユーザーごとのディレクトリに保存:
+調整用の一時DBは、モード`0700`で作成されるユーザーごとのディレクトリに保存されます:
 
- * デフォルト: `<tempdir>/mcp_mistral_queue_<USER>/mcp_mistral_flow_control.db`
-   （`tempfile.gettempdir()`、Linuxでは`/tmp`が一般的）
- * 上書き: `MMQ_TEMP_DB_PATH` にフルパスを設定（親ディレクトリは`0700`で作成）
+ * デフォルト: `<tempdir>/mistral_managed_queue_<USER>/mistral_managed_flow_control.db`
+   （`tempfile.gettempdir()`、Linuxではしばしば`/tmp`）
+ * 上書き: `MMQ_TEMP_DB_PATH`にフルパスを設定（親ディレクトリは`0700`で作成）
 
 ## テスト
 
@@ -259,53 +289,55 @@ uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
 ```
 
 
-e2eテストでは`MMQ_FAKE_API=1`と短い`MMQ_BASE_WAIT_TIME`を使用してプロセス境界（CLI / MCP stdio）を検証。
-Vibe UIの手動チェックは [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) を参照。
+e2eテストでは`MMQ_FAKE_API=1`と短い`MMQ_BASE_WAIT_TIME`を使用してプロセス境界（CLI / MCP stdio）をテストします。
+Vibe UIの手動チェックについては、[docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md)を参照してください。
 
-## サンプル: mmqのバッチ的な使用法（`scripts/translate_readme.py`）
+## mmqのバッチ利用例（`scripts/translate_readme.py`）
 
-CLIやMCPサーバーの他に、Pythonからキューを呼び出すことも可能。このリポジトリにはサンプルが同梱されている:
+CLIやMCPサーバーに加えて、Pythonからキューを呼び出すこともできます。このリポジトリにはサンプルが同梱されています:
 
-**[`scripts/translate_readme.py`](scripts/translate_readme.py)** — 英語ソースからロケール版READMEを**`mmq` / `ask_mistral`と同じ無料プランのキュー**を介して再生成。
+**[`scripts/translate_readme.py`](scripts/translate_readme.py)** — 英語ソースからロケール別READMEを再生成（`mmq` / `ask_mistral`と同じ無料プランのキューを使用）。
 
 | アイデア | mmqに適している理由 |
 |------|-----------------|
-| 散発的なジョブ | ドキュメント変更はチャットほど頻繁ではない |
-| 約31秒待てる | ja → fr の各翻訳でゲート付きスロットを使用 |
-| 共有DB | マシン上の他の無料プランクライアントを回避しない |
-| プログラム的API | `execute_mistral_queue_async` + `MistralRequest` を使用 |
+| 断続的なジョブ | ドキュメント変更はチャットトラフィックよりもはるかに頻度が低い |
+| 約31秒待機可能 | ja → frの各翻訳でゲート付きスロットを消費 |
+| 共有DB | マシン上の他の無料プランクライアントをバイパスしない |
+| プログラム的API | `execute_mistral_queue_async` + `MistralRequest`を使用 |
+
 
 ```bash
 export MISTRAL_API_KEY=...
 # optional: TRANSLATE_MODEL=mistral-small-latest
 
-# From a git checkout (imports mmq.py on PYTHONPATH via the script)
+# From a git checkout (imports the mmq package on PYTHONPATH via the script)
 python scripts/translate_readme.py --lang ja    # one language
 python scripts/translate_readme.py --dry-run    # preview, no write
 ```
 
 
 サンプルの動作:
-1. 囲みコードブロック（行ベースFSM）とインライン``code``をプレースホルダーで保護
-2. **`execute_mistral_queue_async`** を介して各言語の翻訳ジョブを1つずつキューに登録
-3. プレースホルダーを復元、言語スイッチャーを修正、検証（例: 囲みブロックのバランス）
+
+1. 囲みコードブロック（行ベースFSM）とインラインの``code``をプレースホルダーで保護
+2. **`execute_mistral_queue_async`**を通して各言語の翻訳ジョブをキューに登録
+3. プレースホルダーを復元し、言語スイッチャーを修正、検証（例: 囲みブロックのバランス）
 4. アトミックに出力を書き込み
 
-散発的なバッチジョブ（要約、構造化抽出など）のテンプレートとして使用可能。無料プランゲートを共有する。
+頻繁でないバッチジョブ（要約、構造化抽出など）のテンプレートとして使用でき、無料プランゲートを共有します。
 
 ## 謝辞
 
-- Mistral API無料プランに関する情報を共有してくれた **sioois** 氏
+- Mistral API無料プランに関する情報を共有してくれた**sioois**氏
 ([リンク](https://zenn.dev/sioois/articles/dea773011514b1))。
-- SQLite WALモードでのキュー使用に関する知見を提供してくれた **@fujibee** 氏（#agmsg）。
-- AIフレンドリーなCLI開発手法を提供してくれた **shunsuke_suzuki** 氏
+- SQLite WALモードでのキュー利用に関する知見を提供してくれた**@fujibee**氏（#agmsg）。
+- AIに優しいCLI開発手法を提供してくれた**shunsuke_suzuki**氏
 ([リンク](https://zenn.dev/shunsuke_suzuki/articles/make-cli-ai-friendly))。
 
-皆様に感謝します！
+みなさまに感謝します！
 
-## 関連ドキュメント
+## その他のドキュメント
 
- * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Vibe / MCP マニュアルスモーク
+ * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Vibe / MCP手動テスト
  * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — ウェブ検索の位置付け（mmqベース外）
  * [docs/tasks.md](docs/tasks.md) — バックログ
  * [docs/NOTES.md](docs/NOTES.md) — 設計ノート
