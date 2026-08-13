@@ -186,7 +186,7 @@ def validate_markdown(text: str, _n_blocks: int = 0) -> None:
 
 
 async def translate_via_mmq(protected: str, lang: str) -> str:
-    from mmq import MistralRequest, execute_mistral_queue_async
+    from mmq.core import MistralRequest, execute_mistral_queue_async
 
     model = os.environ.get("TRANSLATE_MODEL", "mistral-small-latest")
     user = (
@@ -273,6 +273,12 @@ async def amain(langs: list[str], dry_run: bool) -> int:
 
 
 def main() -> int:
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--lang",

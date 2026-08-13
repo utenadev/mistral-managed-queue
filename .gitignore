@@ -68,3 +68,10 @@ REVIEW.md
 # Personal Taskfile (local ops; not part of the public tree)
 Taskfile.yml
 Taskfile.yaml
+# roborev snapshots
+/.roborev/
+
+t/
+.qwen/
+# Added by code-review-graph
+.code-review-graph/

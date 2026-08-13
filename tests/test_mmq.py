@@ -1,6 +1,7 @@
 """Tests for mcp-mistral-queue core functionality."""
 
 import os
+import asyncio
 import sqlite3
 import sys
 import tempfile
@@ -36,7 +37,7 @@ except Exception:
     mod.Mistral = MagicMock(name="Mistral")
     sys.modules["mistralai"] = mod
 
-from mmq import (
+from mmq.core import (
     BASE_WAIT_TIME,
     BACKOFF_MULTIPLIER,
     DB_SHORT_TIMEOUT,
@@ -44,20 +45,24 @@ from mmq import (
     DEFAULT_SYSTEM_PROMPT,
     MAX_WAIT_TIME,
     MistralRequest,
-    PROGRESS_REPORT_INTERVAL,
+    _is_rate_limit_error,
     call_mistral_api,
+    drain_queue_async,
+    execute_mistral_queue_async,
+    execute_next_task_async,
+)
+from mmq.db import (
+    claim_next_task,
     claim_task,
     clean_zombie_tasks,
     get_secure_temp_db_path,
+    get_task,
     init_db,
-    is_rate_limit_error,
     purge_tasks,
     read_queue_status,
     register_task,
     touch_task,
-    update_rate_limit_wait_time,
     update_task_status,
-    wait_for_rate_limit,
 )
 
 
@@ -81,7 +86,7 @@ def temp_db_path():
 @pytest.fixture
 def mock_db_path(monkeypatch, temp_db_path):
     """Mock the TEMP_DB_PATH for testing."""
-    monkeypatch.setattr("mmq.TEMP_DB_PATH", temp_db_path)
+    monkeypatch.setattr("mmq.db.TEMP_DB_PATH", temp_db_path)
     return temp_db_path
 
 
@@ -112,7 +117,7 @@ class TestMistralRequest:
         """Test messages generation from prompt."""
         req = MistralRequest(prompt="Hello, world!")
         messages = req.to_messages()
-        
+
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
         assert messages[0]["content"] == DEFAULT_SYSTEM_PROMPT
@@ -126,7 +131,7 @@ class TestMistralRequest:
             system_prompt="You are a helpful assistant."
         )
         messages = req.to_messages()
-        
+
         assert messages[0]["content"] == "You are a helpful assistant."
 
     def test_to_messages_with_messages(self):
@@ -137,7 +142,7 @@ class TestMistralRequest:
         ]
         req = MistralRequest(messages=custom_messages)
         messages = req.to_messages()
-        
+
         assert messages == custom_messages
 
     def test_to_messages_without_prompt_or_messages_raises(self):
@@ -155,17 +160,6 @@ class TestMistralRequest:
         with pytest.raises(ValueError, match="not both"):
             req.to_messages()
 
-    def test_public_all_exports(self):
-        """Public API surface is declared via __all__."""
-        import mmq as mmq_mod
-
-        assert set(mmq_mod.__all__) == {
-            "MistralRequest",
-            "execute_mistral_queue_async",
-            "ask_mistral",
-            "get_queue_status",
-        }
-
 
 # =============================================================================
 # Test Database Functions
@@ -175,128 +169,71 @@ class TestDatabaseFunctions:
     """Tests for database-related functions."""
 
     def test_init_db_creates_tables(self, initialized_db):
-        """Test that init_db creates required tables."""
+        """Test that init_db creates the tasks table."""
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            
-            # Check tasks table
+
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'")
             assert cursor.fetchone() is not None
-            
-            # Check api_log table
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='api_log'")
-            assert cursor.fetchone() is not None
-            
-            # Check api_log has initial data
-            cursor.execute("SELECT COUNT(*) FROM api_log")
-            assert cursor.fetchone()[0] == 1
 
-    def test_clean_zombie_tasks_removes_old_processing(self, initialized_db):
-        """Test that clean_zombie_tasks removes old processing tasks."""
+    def test_clean_zombie_tasks_marks_old_processing_failed(self, initialized_db):
+        """Timed-out processing tasks are marked failed and kept short-term."""
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            
-            # Insert a zombie task (old processing task)
-            old_time = time.time() - 200  # 200 seconds ago
+            old_time = time.time() - 200  # older than PROCESSING_TIMEOUT (120s)
             cursor.execute(
-                "INSERT INTO tasks (prompt_summary, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO tasks (prompt, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                 ("test", 2, "processing", old_time, old_time),
             )
             conn.commit()
-        
-        # Clean zombie tasks
-        cleaned = clean_zombie_tasks()
-        assert cleaned >= 1
-        
-        # Verify task was marked as failed
+
+        clean_zombie_tasks()
+
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM tasks WHERE prompt_summary='test'")
+            cursor.execute("SELECT status, error FROM tasks WHERE prompt='test'")
             row = cursor.fetchone()
             assert row is not None
             assert row[0] == "failed"
+            assert "zombie" in (row[1] or "")
 
     def test_clean_zombie_tasks_preserves_recent(self, initialized_db):
-        """Test that clean_zombie_tasks preserves recent processing tasks."""
+        """Recent processing tasks are not touched by zombie cleanup."""
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            
-            # Insert a recent processing task
             cursor.execute(
-                "INSERT INTO tasks (prompt_summary, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO tasks (prompt, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                 ("recent", 2, "processing", time.time(), time.time()),
             )
             conn.commit()
-        
-        # Clean zombie tasks
+
         clean_zombie_tasks()
-        
-        # Verify recent task is still processing
+
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM tasks WHERE prompt_summary='recent'")
+            cursor.execute("SELECT status FROM tasks WHERE prompt='recent'")
             row = cursor.fetchone()
             assert row is not None
             assert row[0] == "processing"
 
 
 # =============================================================================
-# Test Rate Limit Functions
+# Test Rate Limit Detection
 # =============================================================================
 
 class TestRateLimitFunctions:
-    """Tests for rate limiting functions."""
+    """Tests for rate-limit error detection."""
 
     def test_is_rate_limit_error_detects_429(self):
         """Test that 429 errors are detected."""
-        assert is_rate_limit_error(Exception("429 Too Many Requests"))
-        assert is_rate_limit_error(Exception("Rate limit exceeded"))
-        assert is_rate_limit_error(Exception("too many requests"))
+        assert _is_rate_limit_error(Exception("429 Too Many Requests"))
+        assert _is_rate_limit_error(Exception("Rate limit exceeded"))
+        assert _is_rate_limit_error(Exception("too many requests"))
 
     def test_is_rate_limit_error_ignores_other_errors(self):
         """Test that non-rate-limit errors are not detected."""
-        assert not is_rate_limit_error(Exception("Connection error"))
-        assert not is_rate_limit_error(Exception("500 Internal Server Error"))
-
-    @pytest.mark.asyncio
-    async def test_wait_for_rate_limit_initially_ready(self, initialized_db):
-        """Test that rate limit is initially ready."""
-        ready, sleep_needed, wait_time = await wait_for_rate_limit()
-        assert ready is True
-        assert sleep_needed == 0.0
-        assert wait_time == BASE_WAIT_TIME
-
-    @pytest.mark.asyncio
-    async def test_update_and_reset_rate_limit(self, initialized_db):
-        """Test updating and resetting rate limit wait time."""
-        # Update to a new value
-        await update_rate_limit_wait_time(60.0)
-        
-        # Check it was updated
-        ready, sleep_needed, wait_time = await wait_for_rate_limit()
-        assert ready is True
-        assert wait_time == 60.0
-
-    @pytest.mark.asyncio
-    async def test_wait_for_rate_limit_not_ready_when_recent(self, initialized_db):
-        """After a recent stamp, gate should refuse until interval elapses."""
-        # Consume a slot at base interval
-        ready, _, wait_time = await wait_for_rate_limit()
-        assert ready is True
-        assert wait_time == BASE_WAIT_TIME
-
-        ready2, sleep_needed, _ = await wait_for_rate_limit()
-        assert ready2 is False
-        assert sleep_needed > 0
-
-    @pytest.mark.asyncio
-    async def test_stamp_executed_updates_last_executed(self, initialized_db):
-        """stamp_executed=True moves last_executed_at to now for shared backoff."""
-        await update_rate_limit_wait_time(62.0, stamp_executed=True)
-        ready, sleep_needed, wait_time = await wait_for_rate_limit()
-        assert ready is False
-        assert wait_time == 62.0
-        assert sleep_needed > 0
+        assert not _is_rate_limit_error(Exception("Connection error"))
+        assert not _is_rate_limit_error(Exception("500 Internal Server Error"))
 
 
 # =============================================================================
@@ -306,35 +243,27 @@ class TestRateLimitFunctions:
 class TestTaskManagement:
     """Tests for task management functions."""
 
-    @pytest.mark.asyncio
-    async def test_register_task(self, initialized_db):
+    def test_register_task(self, initialized_db):
         """Test task registration."""
-        req = MistralRequest(prompt="Test prompt")
-        task_id = await register_task(req)
-        
+        task_id = register_task(prompt="Test prompt")
+
         assert task_id > 0
-        
-        # Verify in database
+
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, prompt_summary, priority, status FROM tasks WHERE id = ?", (task_id,))
+            cursor.execute("SELECT id, prompt, priority, status FROM tasks WHERE id = ?", (task_id,))
             row = cursor.fetchone()
             assert row is not None
-            assert row[1] == "Test prompt"  # prompt_summary
+            assert row[1] == "Test prompt"
             assert row[2] == 2  # priority (default)
             assert row[3] == "pending"  # status
 
-    @pytest.mark.asyncio
-    async def test_update_task_status(self, initialized_db):
+    def test_update_task_status(self, initialized_db):
         """Test updating task status."""
-        # First register a task
-        req = MistralRequest(prompt="Test")
-        task_id = await register_task(req)
-        
-        # Update status
-        await update_task_status(task_id, "processing", "Working...")
-        
-        # Verify update
+        task_id = register_task(prompt="Test")
+
+        update_task_status(task_id, "processing", "Working...")
+
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT status, result FROM tasks WHERE id = ?", (task_id,))
@@ -342,42 +271,55 @@ class TestTaskManagement:
             assert row[0] == "processing"
             assert row[1] == "Working..."
 
-    @pytest.mark.asyncio
-    async def test_claim_task_exclusive_single_inflight(self, initialized_db):
-        """Only one task may be processing; second claim must fail."""
-        req_a = MistralRequest(prompt="A", priority=2)
-        req_b = MistralRequest(prompt="B", priority=2)
-        id_a = await register_task(req_a)
-        id_b = await register_task(req_b)
+    def test_claim_task_marks_pending_as_processing(self, initialized_db):
+        """Claiming a task transitions it from pending to processing."""
+        task_id = register_task(prompt="A")
 
-        assert await claim_task(id_a) is True
-        # B is next pending but A is still processing
-        assert await claim_task(id_b) is False
+        claimed = claim_task(task_id)
+        assert claimed is not None
+        assert claimed["id"] == task_id
 
-        await update_task_status(id_a, "completed", "done")
-        assert await claim_task(id_b) is True
+        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (task_id,))
+            assert cursor.fetchone()[0] == "processing"
 
-    @pytest.mark.asyncio
-    async def test_claim_task_respects_priority(self, initialized_db):
-        """Higher priority (lower number) is claimed first."""
-        low = await register_task(MistralRequest(prompt="low", priority=3))
-        high = await register_task(MistralRequest(prompt="high", priority=1))
+    def test_claim_task_empty_queue_returns_none(self, initialized_db):
+        """Claiming a task id that does not exist returns None."""
+        assert claim_task(9999) is None
 
-        assert await claim_task(low) is False
-        assert await claim_task(high) is True
+    def test_claim_task_other_task_not_claimed(self, initialized_db):
+        """Claiming one task must not claim a different task."""
+        a = register_task(prompt="a", priority=1)
+        b = register_task(prompt="b", priority=3)
 
-    @pytest.mark.asyncio
-    async def test_touch_task_updates_updated_at(self, initialized_db):
+        claimed_a = claim_task(a)
+        assert claimed_a is not None
+        assert claimed_a["id"] == a
+
+        # b must still be pending (never claimed by a's caller)
+        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM tasks WHERE id = ?", (b,))
+            assert cursor.fetchone()[0] == "pending"
+
+    def test_claim_task_already_claimed_returns_none(self, initialized_db):
+        """A task already processing cannot be claimed a second time."""
+        task_id = register_task(prompt="A")
+        assert claim_task(task_id) is not None
+        assert claim_task(task_id) is None
+
+    def test_touch_task_updates_updated_at(self, initialized_db):
         """Heartbeat refreshes updated_at for processing tasks."""
-        task_id = await register_task(MistralRequest(prompt="hb"))
-        await update_task_status(task_id, "processing")
+        task_id = register_task(prompt="hb")
+        update_task_status(task_id, "processing")
 
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE tasks SET updated_at = ? WHERE id = ?", (1.0, task_id))
             conn.commit()
 
-        await touch_task(task_id)
+        touch_task(task_id)
 
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
@@ -391,100 +333,130 @@ class TestTaskManagement:
 # =============================================================================
 
 class TestQueueStatus:
-    """Tests for read_queue_status (get_queue_status data path)."""
+    """Tests for read_queue_status."""
 
     def test_empty_queue_status(self, initialized_db):
-        """Empty DB: zero pending/processing, slot available if last_exec is old."""
+        """Empty DB: all status counts are zero."""
         status = read_queue_status()
         assert status["pending"] == 0
         assert status["processing"] == 0
-        assert status["in_flight"] is False
-        assert status["current_wait_interval"] == BASE_WAIT_TIME
-        assert status["seconds_until_next_slot"] == 0.0
+        assert status["completed"] == 0
+        assert status["failed"] == 0
+        assert status["total"] == 0
 
-    @pytest.mark.asyncio
-    async def test_counts_pending_and_processing(self, initialized_db):
-        """pending / processing / in_flight reflect task rows."""
-        p1 = await register_task(MistralRequest(prompt="p1"))
-        p2 = await register_task(MistralRequest(prompt="p2"))
-        await update_task_status(p1, "processing")
+    def test_counts_pending_and_processing(self, initialized_db):
+        """pending / processing / completed reflect task rows."""
+        p1 = register_task(prompt="p1")
+        p2 = register_task(prompt="p2")
+        update_task_status(p1, "processing")
 
         status = read_queue_status()
         assert status["pending"] == 1
         assert status["processing"] == 1
-        assert status["in_flight"] is True
-        # p2 still pending; keep lint quiet
+        assert status["total"] == 2
         assert p2 > 0
-
-    def test_seconds_until_next_slot_when_gated(self, initialized_db):
-        """Recent last_executed_at yields positive seconds_until_next_slot."""
-        now = time.time()
-        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE api_log SET last_executed_at = ?, current_wait_time = ? WHERE id = 1",
-                (now, 31.0),
-            )
-            conn.commit()
-
-        status = read_queue_status()
-        assert status["current_wait_interval"] == 31.0
-        assert 25.0 <= status["seconds_until_next_slot"] <= 31.0
 
 
 # =============================================================================
-# Test purge (emergency brake)
+# Test purge
 # =============================================================================
 
 class TestPurgeTasks:
-    """Tests for purge_tasks CLI helpers."""
+    """Tests for purge_tasks."""
 
-    @pytest.mark.asyncio
-    async def test_purge_pending_only(self, initialized_db):
-        p = await register_task(MistralRequest(prompt="pending"))
-        r = await register_task(MistralRequest(prompt="running"))
-        await update_task_status(r, "processing")
+    def test_purge_pending_only(self, initialized_db):
+        p = register_task(prompt="pending")
+        r = register_task(prompt="running")
+        update_task_status(r, "processing")
 
         n = purge_tasks(pending=True)
         assert n == 1
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM tasks WHERE id = ?", (p,))
-            assert cursor.fetchone()[0] == "cancelled"
-            cursor.execute("SELECT status FROM tasks WHERE id = ?", (r,))
-            assert cursor.fetchone()[0] == "processing"
+            cursor.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (p,))
+            assert cursor.fetchone()[0] == 0
+            cursor.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (r,))
+            assert cursor.fetchone()[0] == 1
 
-    @pytest.mark.asyncio
-    async def test_purge_all_pending_and_processing(self, initialized_db):
-        p = await register_task(MistralRequest(prompt="p"))
-        r = await register_task(MistralRequest(prompt="r"))
-        await update_task_status(r, "processing")
-        done = await register_task(MistralRequest(prompt="done"))
-        await update_task_status(done, "completed", "ok")
+    def test_purge_all(self, initialized_db):
+        p = register_task(prompt="p")
+        r = register_task(prompt="r")
+        update_task_status(r, "processing")
+        done = register_task(prompt="done")
+        update_task_status(done, "completed", "ok")
 
-        n = purge_tasks(pending=True, processing=True)
-        assert n == 2
+        n = purge_tasks(all=True)
+        assert n == 3
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM tasks WHERE id = ?", (done,))
-            assert cursor.fetchone()[0] == "completed"
-            cursor.execute("SELECT status FROM tasks WHERE id = ?", (p,))
-            assert cursor.fetchone()[0] == "cancelled"
-            cursor.execute("SELECT status FROM tasks WHERE id = ?", (r,))
-            assert cursor.fetchone()[0] == "cancelled"
+            cursor.execute("SELECT COUNT(*) FROM tasks")
+            assert cursor.fetchone()[0] == 0
 
-    @pytest.mark.asyncio
-    async def test_purge_by_task_id(self, initialized_db):
-        a = await register_task(MistralRequest(prompt="a"))
-        b = await register_task(MistralRequest(prompt="b"))
+    def test_purge_by_task_id(self, initialized_db):
+        a = register_task(prompt="a")
+        b = register_task(prompt="b")
         n = purge_tasks(task_id=a)
         assert n == 1
         with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM tasks WHERE id = ?", (a,))
-            assert cursor.fetchone()[0] == "cancelled"
-            cursor.execute("SELECT status FROM tasks WHERE id = ?", (b,))
-            assert cursor.fetchone()[0] == "pending"
+            cursor.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (a,))
+            assert cursor.fetchone()[0] == 0
+            cursor.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (b,))
+            assert cursor.fetchone()[0] == 1
+
+
+# =============================================================================
+# Test execute_mistral_queue_async concurrency (regressions for H1/H2)
+# =============================================================================
+
+class TestExecuteQueueConcurrent:
+    """Concurrent queue execution must not deadlock and must respect the gate."""
+
+    def _fake_env(self, monkeypatch):
+        monkeypatch.setenv("MMQ_FAKE_API", "1")
+        monkeypatch.setenv("MMQ_FAKE_RESPONSE", "conc-ok")
+        monkeypatch.setenv("MISTRAL_API_KEY", "k")
+        monkeypatch.setattr("mmq.core.BASE_WAIT_TIME", 0.1)
+        monkeypatch.setattr("mmq.db.BASE_WAIT_TIME", 0.1)
+        monkeypatch.setattr("mmq.core.MIN_SLEEP_INTERVAL", 0.02)
+
+    @pytest.mark.asyncio
+    async def test_parallel_execute_no_deadlock(self, initialized_db, monkeypatch):
+        """Two concurrent executes with different priorities must both complete."""
+        self._fake_env(monkeypatch)
+        reqs = [
+            MistralRequest(prompt="low", priority=1),
+            MistralRequest(prompt="high", priority=3),
+        ]
+        results = await asyncio.wait_for(
+            asyncio.gather(
+                execute_mistral_queue_async(reqs[0]),
+                execute_mistral_queue_async(reqs[1]),
+            ),
+            timeout=10,
+        )
+        assert len(results) == 2
+        assert all("conc-ok" in r for r in results)
+
+    @pytest.mark.asyncio
+    async def test_gate_serializes_concurrent_calls(self, initialized_db, monkeypatch):
+        """First call goes through immediately; the second waits on the gate."""
+        self._fake_env(monkeypatch)
+        monkeypatch.setattr("mmq.core.BASE_WAIT_TIME", 0.3)
+        monkeypatch.setattr("mmq.db.BASE_WAIT_TIME", 0.3)
+        monkeypatch.setattr("mmq.core.MIN_SLEEP_INTERVAL", 0.05)
+
+        t0 = time.monotonic()
+        results = await asyncio.wait_for(
+            asyncio.gather(
+                call_mistral_api("k", "m", [{"role": "user", "content": "a"}], task_id=1),
+                call_mistral_api("k", "m", [{"role": "user", "content": "b"}], task_id=2),
+            ),
+            timeout=10,
+        )
+        elapsed = time.monotonic() - t0
+        assert len(results) == 2
+        assert elapsed >= 0.3 * 0.7, f"gate not enforced, elapsed={elapsed:.3f}s"
 
 
 # =============================================================================
@@ -492,11 +464,22 @@ class TestPurgeTasks:
 # =============================================================================
 
 class TestCallMistralApi:
-    """Tests for streaming retry / buffer reset / rate-limit re-entry."""
+    """Tests for streaming retry / buffer reset behavior."""
+
+    @staticmethod
+    def _noop_gate(monkeypatch):
+        """No-op the shared rate gate so these tests exercise retry logic only."""
+        async def _noop(*args, **kwargs):
+            return None
+        import mmq.core
+        monkeypatch.setattr(mmq.core, "_await_rate_limit_slot", _noop)
 
     @pytest.mark.asyncio
-    async def test_partial_stream_reset_on_retry(self, initialized_db, monkeypatch):
+    async def test_partial_stream_reset_on_retry(self, monkeypatch, mock_db_path):
         """Failed partial stream must not be concatenated onto the next attempt."""
+        monkeypatch.setenv("MMQ_FAKE_API", "0")
+        self._noop_gate(monkeypatch)
+
         class FakeChunk:
             def __init__(self, text):
                 self.choices = [MagicMock(delta=MagicMock(content=text))]
@@ -517,23 +500,24 @@ class TestCallMistralApi:
 
         mock_client = MagicMock()
         mock_client.chat.stream_async = fake_stream
-        monkeypatch.setattr("mmq.Mistral", MagicMock(return_value=mock_client))
-        # Skip shared rate-limit re-entry waits on non-429 path (2s sleep only once)
-        monkeypatch.setattr("mmq.MIN_SLEEP_INTERVAL", 0.01)
+        monkeypatch.setattr("mmq.core.Mistral", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("mmq.core.MIN_SLEEP_INTERVAL", 0.01)
 
         result = await call_mistral_api("fake-key", "mistral-small-latest", [{"role": "user", "content": "x"}])
         assert result == "FULL"
         assert "PARTIAL" not in result
 
     @pytest.mark.asyncio
-    async def test_rate_limit_error_reenters_gate(self, initialized_db, monkeypatch):
-        """On 429, shared wait time is stamped and wait_for_rate_limit is used again."""
+    async def test_rate_limit_error_backoff(self, monkeypatch, mock_db_path):
+        """On 429, the retry path backs off and eventually succeeds."""
+        monkeypatch.setenv("MMQ_FAKE_API", "0")
+        self._noop_gate(monkeypatch)
+
         class FakeChunk:
             def __init__(self, text):
                 self.choices = [MagicMock(delta=MagicMock(content=text))]
 
         call_count = {"n": 0}
-        gate_calls = {"n": 0}
 
         async def fake_stream(*args, **kwargs):
             call_count["n"] += 1
@@ -543,25 +527,15 @@ class TestCallMistralApi:
                 yield FakeChunk("ok")
             return gen()
 
-        async def fake_await_slot(*, ctx=None, task_id=None):
-            gate_calls["n"] += 1
-            # Grant immediately without real sleep
-            return
-
         mock_client = MagicMock()
         mock_client.chat.stream_async = fake_stream
-        monkeypatch.setattr("mmq.Mistral", MagicMock(return_value=mock_client))
-        monkeypatch.setattr("mmq._await_rate_limit_slot", fake_await_slot)
+        monkeypatch.setattr("mmq.core.Mistral", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("mmq.core.MAX_WAIT_TIME", 0.05)
+        monkeypatch.setattr("mmq.core.BASE_WAIT_TIME", 0.01)
 
         result = await call_mistral_api("fake-key", "mistral-small-latest", [{"role": "user", "content": "x"}])
         assert result == "ok"
-        assert gate_calls["n"] == 1
-
-        with sqlite3.connect(initialized_db, timeout=DB_SHORT_TIMEOUT) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT current_wait_time FROM api_log WHERE id = 1")
-            # After success, wait time is reset to BASE
-            assert cursor.fetchone()[0] == BASE_WAIT_TIME
+        assert call_count["n"] == 2
 
 
 # =============================================================================
@@ -595,3 +569,179 @@ class TestHelperFunctions:
         path = get_secure_temp_db_path()
         assert path.endswith("mcp_mistral_flow_control.db")
         assert "mcp_mistral_queue_" in path
+
+
+# =============================================================================
+# Test claim_next_task (priority-ordered worker claim)
+# =============================================================================
+
+class TestClaimNextTask:
+    """The worker's priority-ordered claim must be atomic and deterministic."""
+
+    def test_claims_highest_priority_first(self, initialized_db):
+        register_task(prompt="low", priority=1)
+        register_task(prompt="high", priority=3)
+        register_task(prompt="mid", priority=2)
+        assert claim_next_task()["priority"] == 3
+        assert claim_next_task()["priority"] == 2
+        assert claim_next_task()["priority"] == 1
+        assert claim_next_task() is None
+
+    def test_fifo_on_tie(self, initialized_db):
+        a = register_task(prompt="a", priority=5)
+        b = register_task(prompt="b", priority=5)
+        assert claim_next_task()["id"] == a
+        assert claim_next_task()["id"] == b
+
+    def test_atomic_no_double_claim(self, initialized_db):
+        a = register_task(prompt="a", priority=2)
+        b = register_task(prompt="b", priority=2)
+        first = claim_next_task()["id"]
+        second = claim_next_task()["id"]
+        assert {first, second} == {a, b}
+        # Already-claimed tasks are never handed out again
+        assert claim_next_task() is None
+
+    def test_claimed_task_marked_processing(self, initialized_db):
+        tid = register_task(prompt="x", priority=2)
+        claim_next_task()
+        task = get_task(tid)
+        assert task["status"] == "processing"
+
+
+# =============================================================================
+# Test get_task
+# =============================================================================
+
+class TestGetTask:
+    """get_task must return the full row or None."""
+
+    def test_returns_full_row(self, initialized_db):
+        tid = register_task(prompt="p", model="m", system_prompt="s", priority=7)
+        task = get_task(tid)
+        assert task is not None
+        assert task["prompt"] == "p"
+        assert task["model"] == "m"
+        assert task["system_prompt"] == "s"
+        assert task["priority"] == 7
+        assert task["status"] == "pending"
+
+    def test_missing_returns_none(self, initialized_db):
+        assert get_task(99999) is None
+
+
+# =============================================================================
+# Test worker drain (execute_next / drain / watch)
+# =============================================================================
+
+class TestWorkerQueue:
+    """The `mmq work` worker drains pending tasks in priority order."""
+
+    def _fake_env(self, monkeypatch):
+        monkeypatch.setenv("MMQ_FAKE_API", "1")
+        monkeypatch.setenv("MMQ_FAKE_RESPONSE", "work-ok")
+        monkeypatch.setenv("MISTRAL_API_KEY", "k")
+        monkeypatch.setattr("mmq.core.BASE_WAIT_TIME", 0.05)
+        monkeypatch.setattr("mmq.db.BASE_WAIT_TIME", 0.05)
+        monkeypatch.setattr("mmq.core.MIN_SLEEP_INTERVAL", 0.01)
+
+    @pytest.mark.asyncio
+    async def test_execute_next_empty_queue(self, initialized_db, monkeypatch):
+        self._fake_env(monkeypatch)
+        assert await execute_next_task_async() is None
+
+    @pytest.mark.asyncio
+    async def test_execute_next_returns_response(self, initialized_db, monkeypatch):
+        self._fake_env(monkeypatch)
+        monkeypatch.setenv("MMQ_FAKE_RESPONSE", "single-ok")
+        register_task(prompt="hi", priority=2)
+        result = await execute_next_task_async()
+        assert result == "single-ok"
+
+    @pytest.mark.asyncio
+    async def test_drain_processes_all_and_completes(self, initialized_db, monkeypatch):
+        self._fake_env(monkeypatch)
+        low = register_task(prompt="low", priority=1)
+        mid = register_task(prompt="mid", priority=2)
+        high = register_task(prompt="high", priority=3)
+        count = await drain_queue_async()
+        assert count == 3
+        for tid in (low, mid, high):
+            task = get_task(tid)
+            assert task["status"] == "completed"
+
+    @pytest.mark.asyncio
+    async def test_drain_continues_past_failure(self, initialized_db, monkeypatch):
+        self._fake_env(monkeypatch)
+        monkeypatch.setenv("MMQ_FAKE_FAIL", "error")
+        a = register_task(prompt="a", priority=2)
+        b = register_task(prompt="b", priority=1)
+        count = await drain_queue_async()
+        assert count == 2
+        assert get_task(a)["status"] == "failed"
+        assert get_task(b)["status"] == "failed"
+
+
+# =============================================================================
+# Test CLI wiring regressions (adversarial review agy+opus 2026-08-13)
+# =============================================================================
+
+class TestCliWiring:
+    """CLI subcommand wiring must not pass arguments in the wrong order or None."""
+
+    def test_catalog_fetch_passes_document_to_writer(self, monkeypatch):
+        """write_catalog_yaml(path, document) must receive (output, document)."""
+        from types import SimpleNamespace
+
+        from mmq import cli
+
+        doc = {"schema_version": 1, "providers": []}
+        fake_fetch = MagicMock(
+            return_value=SimpleNamespace(document=doc, errors=[], partial=False)
+        )
+        fake_write = MagicMock()
+        monkeypatch.setattr(cli, "fetch_catalog", fake_fetch)
+        monkeypatch.setattr(cli, "write_catalog_yaml", fake_write)
+
+        args = cli._build_parser().parse_args(["catalog", "fetch", "-o", "out.yaml"])
+        assert cli._resolve_args(args) == 0
+        fake_write.assert_called_once_with("out.yaml", doc)
+        assert fake_fetch.call_args.kwargs.get("validate") is True
+
+    def test_catalog_fetch_no_validate_flag(self, monkeypatch):
+        """`--no-validate` must reach fetch_catalog (not be silently ignored)."""
+        from types import SimpleNamespace
+
+        from mmq import cli
+
+        fake_fetch = MagicMock(
+            return_value=SimpleNamespace(document={}, errors=[], partial=False)
+        )
+        fake_write = MagicMock()
+        monkeypatch.setattr(cli, "fetch_catalog", fake_fetch)
+        monkeypatch.setattr(cli, "write_catalog_yaml", fake_write)
+
+        args = cli._build_parser().parse_args(
+            ["catalog", "fetch", "--no-validate", "-o", "out.yaml"]
+        )
+        assert cli._resolve_args(args) == 0
+        assert fake_fetch.call_args.kwargs.get("validate") is False
+
+    def test_ask_defaults_model_when_omitted(self, monkeypatch, capsys):
+        """`mmq ask` without -m must fall back to DEFAULT_MODEL, not None."""
+        from mmq import cli
+        from mmq import core as core_mod
+
+        calls = {}
+
+        async def fake_call(api_key, model, messages, task_id=None):
+            calls["model"] = model
+            calls["messages"] = messages
+            return "hello"
+
+        monkeypatch.setattr(core_mod, "call_mistral_api", fake_call)
+        args = cli._build_parser().parse_args(["ask", "hi"])
+        assert cli._resolve_args(args) == 0
+        assert calls["model"] == DEFAULT_MODEL
+        assert "hi" in str(calls["messages"])
+

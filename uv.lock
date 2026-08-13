@@ -623,11 +623,13 @@ cli = [
 
 [[package]]
 name = "mcp-mistral-queue"
-version = "0.1.2"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
     { name = "mistralai" },
+    { name = "pyyaml" },
 ]
 
 [package.optional-dependencies]
@@ -639,11 +641,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.25.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0,<2" },
     { name = "mistralai", specifier = ">=1.0.0,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 provides-extras = ["dev"]
 

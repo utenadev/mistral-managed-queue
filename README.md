@@ -4,23 +4,21 @@
 
 [![PyPI](https://img.shields.io/pypi/v/mcp-mistral-queue)](https://pypi.org/project/mcp-mistral-queue/)
 
-An MCP (Model Context Protocol) server and CLI tool that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
+A CLI tool and MCP (Model Context Protocol) server that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
 It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
 
-**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.1.2`
+**Package:** [`mcp-mistral-queue`](https://pypi.org/project/mcp-mistral-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.2.0`
 
 ## Features
 
  * **Automatic rate-limit coordination**: Shared ~31s start interval; on 429, shared backoff then re-enter the gate. Resets to the base interval on success.
- * **Multi-process & priority control**: Multiple processes/tasks can enqueue work. Priority (1–3) plus single in-flight processing order the queue.
- * **Flexible model & message options**: Any Mistral chat model name (defaults to `mistral-small-latest`; e.g. `mistral-large-latest`, `codestral-latest`), plus full conversation history via a `messages` array.
- * **Streaming & cancel handling**: Streams the Mistral API response internally (tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
+ * **Multi-process & priority control**: Multiple processes/tasks can enqueue work. Priority (default 2; larger value is processed first) plus single in-flight processing order the queue.
+ * **Flexible model & message options**: Any Mistral chat model name (defaults to `mistral-small-latest`; e.g. `mistral-large-latest`, `codestral-latest`).
+ * **Streaming & cancel handling**: Streams the Mistral API response internally (the tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
  * **Local control DB**: Temp DB under a per-user directory with mode `0700` (path overridable via `MMQ_TEMP_DB_PATH`).
  * **PyPI / uvx**: Install once or run ephemerally; entry point is `mmq`.
- * **Mistral Vibe / Grok / Claude Desktop**: Register as an MCP server (`mmq --mcp`). Do **not** use `vibe mmq.py "..."` — that runs Vibe’s agent CLI, not this tool.
+ * **Catalog fetching**: Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral) with `mmq catalog fetch` (requires `httpx` and `PyYAML`, both installed as dependencies).
  * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
- * **AI-friendly CLI**: Built for coding agents (Vibe, Claude Code, etc.) with `docs list` / `docs show` subcommands, agent guidance in help text, and JSON outputs for easy parsing.
- * **Stdin pipe support**: Pipe `git diff --staged` output directly into `mmq` to generate commit messages.
 
 ## Prerequisites
 
@@ -50,89 +48,102 @@ mmq --help
 **Quick smoke (needs `MISTRAL_API_KEY`; counts against free-tier quota):**
 
 ```bash
-uvx --from mcp-mistral-queue mmq "Reply with pong only."
+uvx --from mcp-mistral-queue mmq ask "Reply with pong only."
 ```
 
 **Notes:**
 
- * Console script name is **`mmq`**. Wrong: `uvx mcp-mistral-queue --mcp`. Right: `uvx --from mcp-mistral-queue mmq --mcp`.
- * Dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2` (pulled in by the package).
+ * Console script name is **`mmq`**. Wrong: `uvx mcp-mistral-queue ...`. Right: `uvx --from mcp-mistral-queue mmq ...`.
+ * Dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`, `httpx>=0.25.0`, `PyYAML>=6.0` (pulled in by the package).
 
 ## Usage
 
-### 1. CLI mode
+The CLI is subcommand-based: `mmq ask`, `mmq fetch`, `mmq work`, `mmq purge`, `mmq catalog`, `mmq mcp`.
 
-After PyPI install / via `uvx`, invoke **`mmq`**.  
-From a git checkout you can still use `uv run mmq.py ...` (PEP 723).
+### 1. `ask` — direct API call (bypasses the queue)
+
+Sends the prompt to the Mistral API immediately and prints the response.
 
 ```bash
 # Basic run (default model: mistral-small-latest)
-uvx --from mcp-mistral-queue mmq "Explain Python list comprehensions briefly"
-# or: mmq "Explain Python list comprehensions briefly"
+uvx --from mcp-mistral-queue mmq ask "Explain Python list comprehensions briefly"
+# or: mmq ask "Explain Python list comprehensions briefly"
 
 # Choose a model (e.g. mistral-large-latest, codestral-latest)
-mmq -m mistral-large-latest "Explain a complex algorithm"
+mmq ask -m mistral-large-latest "Explain a complex algorithm"
 
 # Custom system prompt
-mmq -s "You are an AI that speaks casually." "How is the weather today?"
+mmq ask -s "You are an AI that speaks casually." "How is the weather today?"
 
-# Priority (1: high, 2: normal, 3: low)
-mmq --priority 1 "Urgent question"
-
-# Full conversation context as a messages JSON array
-# (specify either prompt or --messages, not both)
-mmq --messages '[{"role":"system","content":"Strict programmer"},{"role":"user","content":"What is ownership in Rust?"}]'
-
-# Emergency brake: cancel queued / stuck work (no API call)
-mmq --purge          # cancel all pending
-mmq --purge-all      # cancel pending + processing
-mmq --purge-id 42    # cancel one task by ID
-
-# New structured purge subcommand (recommended for scripts/AI)
-mmq purge --pending   # cancel all pending tasks
-mmq purge --all       # cancel all pending + processing tasks
-mmq purge --id 42     # cancel specific task by ID
-
-# Pipe stdin to generate a commit message from staged changes
-git diff --staged | mmq
-git diff --staged | mmq -
-git diff --staged | mmq --stdin
-git diff --staged | mmq -s "Generate a concise commit message"
+# JSON output for easy parsing
+mmq ask -j "What is ownership in Rust?"
 ```
 
-### AI-Friendly Documentation Commands
+### 2. `fetch` — enqueue for asynchronous processing
 
-For coding agents (Vibe, Claude Code, etc.):
+Registers the prompt in the shared queue. It is **not** processed here — run
+`mmq work` to drain the queue.
 
 ```bash
-# List all available documentation
-mmq docs list
+# Enqueue with default priority (2)
+mmq fetch "Summarize this document"
 
-# Show specific documentation (returns markdown content)
-mmq docs show usage
-mmq docs show install
-mmq docs show mcp
-mmq docs show rate-limit
-mmq docs show troubleshooting
-mmq docs show examples
+# Choose a model / system prompt / priority
+mmq fetch -m mistral-large-latest -s "Be concise" -p 1 "Translate this to Japanese"
 ```
 
-The `docs list` command outputs JSON with descriptions for easy parsing:
+**Priority**: larger value is processed first (`ORDER BY priority DESC`). Default is `2`.
 
-```json
-{
-  "results": [
-    {"name": "usage", "description": "Usage guide and examples for mcp-mistral-queue CLI"},
-    {"name": "install", "description": "Installation instructions for mcp-mistral-queue"}
-  ],
-  "help": "If you are a coding agent, run `mmq docs show {name}` to see details."
-}
+### 3. `work` — process the queue (worker mode)
+
+Claims and processes pending tasks in priority order (highest first; FIFO within
+the same priority), each through the shared rate gate.
+
+```bash
+mmq work            # drain all currently pending tasks
+mmq work --once     # process exactly one task and exit
+mmq work --watch    # keep processing new tasks until interrupted (Ctrl-C)
 ```
 
-### 2. MCP server mode (Vibe / Grok / Claude Desktop / …)
+### 4. `purge` — cancel queued tasks
 
-Expose **`ask_mistral`** and **`get_queue_status`** to MCP hosts.  
-Separate path from CLI prompts.
+```bash
+mmq purge --pending   # delete all pending tasks
+mmq purge --all       # delete every task (including completed/failed)
+mmq purge --id 42     # delete a specific task by ID
+```
+
+### 5. `catalog fetch` — fetch provider model catalogs
+
+Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral). Requires `httpx` and `PyYAML` (both installed as dependencies).
+
+```bash
+# Fetch from all enabled providers and write to ./models.yaml (default)
+mmq catalog fetch
+
+# Specify output file
+mmq catalog fetch -o ./my-catalog.yaml
+
+# Skip validation
+mmq catalog fetch --no-validate
+```
+
+Catalog fetching uses its own rate limiting, tuned independently from the chat API via `MMQ_CATALOG_BASE_WAIT_TIME` and `MMQ_CATALOG_MAX_WAIT_TIME`. If unset, they fall back to `MMQ_BASE_WAIT_TIME` / `MMQ_MAX_WAIT_TIME`.
+
+### 6. `mcp` — MCP server control
+
+Only available when MCP is enabled (set `MMQ_ENABLE_MCP=true`).
+
+```bash
+MMQ_ENABLE_MCP=true mmq mcp run      # start the MCP server
+MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
+```
+
+### 7. MCP server mode (Vibe / Grok / Claude Desktop / …)
+
+Expose **`ask_mistral`** and **`get_queue_status`** to MCP hosts.
+
+MCP is **opt-in**: set `MMQ_ENABLE_MCP=true` (values: `1` / `true` / `yes` / `on`) in the host environment, then run `mmq mcp run`.
 
 #### PyPI / uvx (recommended)
 
@@ -141,8 +152,9 @@ Separate path from CLI prompts.
   "mcpServers": {
     "mistral-queue": {
       "command": "uvx",
-      "args": ["--from", "mcp-mistral-queue", "mmq", "--mcp"],
+      "args": ["--from", "mcp-mistral-queue", "mmq", "mcp", "run"],
       "env": {
+        "MMQ_ENABLE_MCP": "true",
         "MISTRAL_API_KEY": "your-mistral-api-key"
       }
     }
@@ -157,8 +169,9 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
   "mcpServers": {
     "mistral-queue": {
       "command": "mmq",
-      "args": ["--mcp"],
+      "args": ["mcp", "run"],
       "env": {
+        "MMQ_ENABLE_MCP": "true",
         "MISTRAL_API_KEY": "your-mistral-api-key"
       }
     }
@@ -178,10 +191,10 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
         "--with", "mcp[cli]>=1.0.0,<2",
         "--with", "mistralai>=1.0.0,<2",
         "--no-project",
-        "/absolute/path/to/mmq.py",
-        "--mcp"
+        "python", "-m", "mmq.cli", "mcp", "run"
       ],
       "env": {
+        "MMQ_ENABLE_MCP": "true",
         "MISTRAL_API_KEY": "your-mistral-api-key"
       }
     }
@@ -198,10 +211,17 @@ After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VI
 | `MISTRAL_API_KEY` | (required) | Mistral API key |
 | `MMQ_TEMP_DB_PATH` | per-user under tempdir | Shared queue DB file path |
 | `MMQ_BASE_WAIT_TIME` | `31` | Seconds between starts (free-tier pacing) |
+| `MMQ_MAX_WAIT_TIME` | `300` | Max backoff wait |
+| `MMQ_MIN_SLEEP_INTERVAL` | `2` | Min sleep between retries |
+| `MMQ_BACKOFF_MULTIPLIER` | `2.0` | Backoff multiplier on 429 |
+| `MMQ_PROCESSING_TIMEOUT` | `120` | Zombie task timeout (seconds) |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Default model name |
+| `MMQ_ENABLE_MCP` | off | Enable MCP server / `mcp` subcommands (`1`/`true`) |
+| `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | Catalog fetch pacing |
+| `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | Catalog fetch max backoff |
 | `MMQ_FAKE_API` | off | Offline / e2e: fake client (`1`/`true`) |
-
-Other knobs (`MMQ_MAX_WAIT_TIME`, `MMQ_MAX_RETRIES`, …) exist for tuning; see `mmq.py`.
+| `MMQ_FAKE_RESPONSE` | — | Fixed fake response text (testing) |
+| `MMQ_FAKE_FAIL` | — | `429` or `error` to simulate failure (testing) |
 
 ### MCP tools
 
@@ -211,23 +231,24 @@ When the server is running, clients can use the following tools:
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
-| prompt | string | null | Single-shot user prompt text |
-| messages | array | null | Conversation history (`[{"role": "...", "content": "..."}]`) |
+| prompt | string | required | User prompt text |
 | model | string | `"mistral-small-latest"` | Mistral model name |
-| system_prompt | string | null | Custom system prompt (only when using `prompt`) |
-| priority | number | 2 | Task priority (1: high, 2: normal, 3: low) |
+| system_prompt | string | null | Custom system prompt |
 
 #### `get_queue_status`
 
-Returns current shared queue / rate-limit status as JSON:
+Returns current shared queue status as JSON:
 
 | Field | Type | Description |
 |---|---|---|
 | pending | number | Tasks waiting in the queue |
 | processing | number | Tasks currently claimed / running |
-| seconds_until_next_slot | number | Seconds until the shared API gate opens |
-| current_wait_interval | number | Active shared wait interval (seconds) |
-| in_flight | boolean | Whether any task is currently processing |
+| completed | number | Tasks finished |
+| failed | number | Tasks failed |
+| total | number | Total tasks |
+| seconds_until_next_slot | number | Seconds until the rate gate grants the next slot |
+| current_wait_interval | number | Current shared wait interval (after backoff) |
+| in_flight | boolean | True if any task is currently processing |
 
 ## Control data location
 
@@ -279,7 +300,7 @@ Besides the CLI and MCP server, you can call the queue from Python. This repo sh
 export MISTRAL_API_KEY=...
 # optional: TRANSLATE_MODEL=mistral-small-latest
 
-# From a git checkout (imports mmq.py on PYTHONPATH via the script)
+# From a git checkout (imports the mmq package on PYTHONPATH via the script)
 python scripts/translate_readme.py              # → README.ja.md + README.fr.md
 python scripts/translate_readme.py --lang ja    # one language
 python scripts/translate_readme.py --dry-run    # preview, no write

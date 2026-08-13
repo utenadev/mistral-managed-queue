@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MMQ_SCRIPT = REPO_ROOT / "mmq.py"
+MMQ_MODULE = "mmq.cli"
 
 # If unit tests (or other plugins) left MagicMock stubs in sys.modules, drop them
 # so the real MCP client can be imported for protocol e2e.
@@ -27,14 +27,14 @@ def repo_root() -> Path:
 
 
 @pytest.fixture(scope="session")
-def mmq_script() -> Path:
-    assert MMQ_SCRIPT.is_file(), f"mmq.py not found at {MMQ_SCRIPT}"
-    return MMQ_SCRIPT
+def mmq_script() -> str:
+    """Return the module to run as the mmq CLI (python -m mmq.cli)."""
+    return MMQ_MODULE
 
 
 @pytest.fixture(scope="session")
 def python_exe() -> str:
-    """Interpreter that runs mmq.py (must have mcp + mistralai when not faking import)."""
+    """Interpreter that runs mmq.cli (must have mcp + mistralai when not faking import)."""
     return sys.executable
 
 
@@ -70,10 +70,10 @@ def e2e_env(e2e_db) -> dict:
 
 @pytest.fixture
 def mmq_cmd(python_exe, mmq_script):
-    """Build argv prefix: [python, mmq.py, ...]."""
+    """Build argv prefix: [python, -m, mmq.cli, ...]."""
 
     def _cmd(*args: str) -> list[str]:
-        return [python_exe, str(mmq_script), *args]
+        return [python_exe, "-m", mmq_script, *args]
 
     return _cmd
 

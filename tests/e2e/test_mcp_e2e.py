@@ -23,7 +23,7 @@ async def test_mcp_list_and_call_ask_mistral(
     env = {**e2e_env, "MMQ_FAKE_RESPONSE": "mcp-tool-ok"}
     params = StdioServerParameters(
         command=python_exe,
-        args=[str(mmq_script), "--mcp"],
+        args=["-m", str(mmq_script), "--mcp"],
         env=env,
     )
 
@@ -64,7 +64,7 @@ async def test_mcp_missing_prompt_and_messages_errors(
 
     params = StdioServerParameters(
         command=python_exe,
-        args=[str(mmq_script), "--mcp"],
+        args=["-m", str(mmq_script), "--mcp"],
         env=e2e_env,
     )
 
@@ -95,7 +95,7 @@ async def test_mcp_server_starts_and_pings(
 
     params = StdioServerParameters(
         command=python_exe,
-        args=[str(mmq_script), "--mcp"],
+        args=["-m", str(mmq_script), "--mcp"],
         env=e2e_env,
     )
 
@@ -121,7 +121,7 @@ async def test_mcp_get_queue_status(
 
     params = StdioServerParameters(
         command=python_exe,
-        args=[str(mmq_script), "--mcp"],
+        args=["-m", str(mmq_script), "--mcp"],
         env=e2e_env,
     )
 
@@ -151,3 +151,44 @@ async def test_mcp_get_queue_status(
             assert isinstance(data["pending"], int)
             assert isinstance(data["processing"], int)
             assert isinstance(data["in_flight"], bool)
+
+
+@pytest.mark.asyncio
+async def test_mcp_two_concurrent_calls_no_deadlock(
+    python_exe, mmq_script, e2e_env, mcp_available
+):
+    """Two concurrent ask_mistral calls must both complete (regression for H1)."""
+    import asyncio
+
+    from tests.e2e.conftest import require_mcp
+
+    require_mcp(mcp_available)
+
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    env = {**e2e_env, "MMQ_FAKE_RESPONSE": "mcp-conc-ok"}
+    params = StdioServerParameters(
+        command=python_exe,
+        args=["-m", str(mmq_script), "--mcp"],
+        env=env,
+    )
+
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            async def _call(prompt):
+                res = await session.call_tool("ask_mistral", {"prompt": prompt})
+                texts = [
+                    getattr(b, "text", "") or ""
+                    for b in res.content
+                ]
+                return "".join(texts)
+
+            results = await asyncio.wait_for(
+                asyncio.gather(_call("one"), _call("two")),
+                timeout=20,
+            )
+            assert len(results) == 2
+            assert all("mcp-conc-ok" in r for r in results)
