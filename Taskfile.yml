@@ -1,0 +1,123 @@
+# Local ops only — listed in .gitignore (not committed).
+# Requires: uv, git; MISTRAL_API_KEY for translate; ~/.pypirc or UV_PUBLISH_TOKEN for pypi.
+version: "3"
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  test:
+    desc: Unit + e2e (fake API)
+    cmds:
+      - >-
+        uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
+        --with pytest --with pytest-asyncio --no-project
+        python -m pytest tests/ -v -m "not live"
+
+  readme:translate:
+    desc: README.md (EN) → ja + fr via mmq queue
+    cmds:
+      - >-
+        uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
+        --no-project python scripts/translate_readme.py
+
+  readme:translate:ja:
+    desc: README.md → README.ja.md only
+    cmds:
+      - >-
+        uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
+        --no-project python scripts/translate_readme.py --lang ja
+
+  readme:translate:fr:
+    desc: README.md → README.fr.md only
+    cmds:
+      - >-
+        uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
+        --no-project python scripts/translate_readme.py --lang fr
+
+  readme:translate:dry:
+    desc: Dry-run translation (no write)
+    cmds:
+      - >-
+        uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
+        --no-project python scripts/translate_readme.py --dry-run
+
+  semgrep:
+    desc: Run semgrep static analysis
+    cmds:
+      - uv run --with semgrep semgrep scan --config auto
+
+  gitleaks:
+    desc: Run gitleaks secret detection
+    cmds:
+      - gitleaks detect --no-git --verbose
+
+  # --- catalog ---
+
+  catalog:fetch:
+    desc: Fetch provider model catalogs -> models.yaml
+    cmds:
+      - uv run mmq catalog fetch
+
+  # --- git / release ---
+
+  push:
+    desc: git push origin (current branch + tags)
+    cmds:
+      - git push origin HEAD
+      - git push origin --tags
+
+  push:branch:
+    desc: git push origin HEAD only (no tags)
+    cmds:
+      - git push origin HEAD
+
+  push:tags:
+    desc: git push origin --tags only
+    cmds:
+      - git push origin --tags
+
+  # --- PyPI ---
+
+  pypi:build:
+    desc: uv build → dist/ (sdist + wheel)
+    cmds:
+      - rm -rf dist
+      - uv build
+      - ls -la dist/
+
+  pypi:publish:
+    desc: Upload dist/* to PyPI (uses UV_PUBLISH_TOKEN or ~/.pypirc)
+    deps: [pypi:build]
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -z "${UV_PUBLISH_TOKEN:-}" ] && [ -f "${HOME}/.pypirc" ]; then
+          export UV_PUBLISH_TOKEN="$(python3 -c "
+        import configparser
+        from pathlib import Path
+        cp = configparser.ConfigParser()
+        cp.read(Path.home() / '.pypirc')
+        print(cp['pypi']['password'], end='')
+        ")"
+        fi
+        if [ -z "${UV_PUBLISH_TOKEN:-}" ]; then
+          echo "Set UV_PUBLISH_TOKEN or configure ~/.pypirc [pypi]" >&2
+          exit 1
+        fi
+        uv publish
+        unset UV_PUBLISH_TOKEN
+
+  pypi:up:
+    desc: Alias — build + publish to PyPI
+    cmds:
+      - task pypi:publish
+
+  # build + push git + PyPI (after version bump & tag already committed)
+  release:up:
+    desc: git push (branch+tags) then PyPI build+publish
+    cmds:
+      - task push
+      - task pypi:publish

@@ -65,9 +65,8 @@ tmp/
 # Internal review notes (not for public tree)
 REVIEW.md
 
-# Personal Taskfile (local ops; not part of the public tree)
-Taskfile.yml
-Taskfile.yaml
+# Personal Taskfile (local ops)
+# Taskfile.yml
 # roborev snapshots
 /.roborev/
 
