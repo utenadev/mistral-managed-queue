@@ -17,7 +17,7 @@ It uses SQLite (WAL mode) and async queueing with a single in-flight task to spa
  * **Streaming & cancel handling**: Streams the Mistral API response internally (the tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
  * **Local control DB**: Temp DB under a per-user directory with mode `0700` (path overridable via `MMQ_TEMP_DB_PATH`).
  * **PyPI / uvx**: Install once or run ephemerally; entry point is `mmq`.
- * **Catalog fetching**: Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral) with `mmq catalog fetch` (requires `httpx` and `PyYAML`, both installed as dependencies).
+ * **Catalog fetching**: Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral) with `mmq catalog fetch` (requires `pip install mistral-managed-queue[catalog]`).
  * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
 
 ## Prerequisites

@@ -1,6 +1,7 @@
 """Tests for mistral-managed-queue core functionality."""
 
 import os
+import inspect
 import asyncio
 import sqlite3
 import sys
@@ -46,10 +47,12 @@ try:
 except ImportError:
     _HAS_CATALOG_DEPS = False
 
-# Check for MCP availability (e.g. for _get_mcp tests)
+# Check for MCP availability (e.g. for _get_mcp tests).
+# The stubs above inject MagicMock, so verify we got a real class:
+# a MagicMock would make the real registration test meaningless.
 try:
     from mcp.server.fastmcp import FastMCP  # noqa: F401
-    _HAS_MCP = True
+    _HAS_MCP = inspect.isclass(FastMCP) and FastMCP.__module__.startswith("mcp.")
 except ImportError:
     _HAS_MCP = False
 from mmq.core import (
