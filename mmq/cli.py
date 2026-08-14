@@ -13,9 +13,7 @@ from .db import (
     register_task as db_register_task,
     purge_tasks as db_purge_tasks,
 )
-from .mcp_server import start_mcp_server, start_mcp_server_stdio, _MCP_ENABLED
-from .catalog.fetch import fetch_catalog
-from .catalog.write import write_catalog_yaml
+# catalog/mcp_server are lazy-imported in subcommand handlers.
 
 logger = logging.getLogger("mistral-managed-queue")
 
@@ -103,7 +101,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # ---- MCP (only shown when enabled) ----
-    if _MCP_ENABLED:
+    if os.environ.get("MMQ_ENABLE_MCP", "").lower() in ("1", "true", "yes", "on"):
         mcp_parser = subparsers.add_parser(
             "mcp", help="MCP server operations (only available when MMQ_ENABLE_MCP is true)"
         )
@@ -193,6 +191,15 @@ def _resolve_args(args: argparse.Namespace) -> int:
 
     if args.command == "catalog":
         if args.subcommand == "fetch":
+            try:
+                from .catalog.fetch import fetch_catalog
+                from .catalog.write import write_catalog_yaml
+            except ImportError:
+                print(
+                    "Catalog support not installed. Install it with: pip install mistral-managed-queue[catalog]",
+                    file=sys.stderr,
+                )
+                return 1
             catalog = fetch_catalog(use_rate_gate=False, validate=not args.no_validate)
             write_catalog_yaml(args.output, catalog.document)
             print(f"Catalog written to {args.output}.")
@@ -203,6 +210,8 @@ def _resolve_args(args: argparse.Namespace) -> int:
         return 1
 
     if args.command == "mcp":
+        from .mcp_server import _MCP_ENABLED, start_mcp_server
+
         if not _MCP_ENABLED:
             logger.error("MCP is disabled. Set MMQ_ENABLE_MCP=true to enable it.")
             return 1
@@ -210,12 +219,7 @@ def _resolve_args(args: argparse.Namespace) -> int:
             start_mcp_server(host=args.host, port=args.port)
             return 0
         if args.subcommand == "status":
-            # Simple availability check (actual socket checks could be added)
-            from .mcp_server import mcp
-            if mcp is not None:
-                print("MCP server is enabled (check separately whether it is running)")
-            else:
-                print("MCP server is disabled")
+            print("MCP server is enabled (check separately whether it is running)")
             return 0
         parser = _build_parser()
         parser.error(f"Unknown mcp subcommand: {args.subcommand}")
@@ -236,6 +240,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if getattr(args, "mcp", False):
+        from .mcp_server import start_mcp_server_stdio
         start_mcp_server_stdio()
         sys.exit(0)
     if args.command is None:

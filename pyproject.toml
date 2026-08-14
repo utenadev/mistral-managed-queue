@@ -1,17 +1,19 @@
 [project]
 name = "mistral-managed-queue"
 version = "0.2.0"
-description = "MCP server for Mistral API with queueing and rate limiting"
+description = "CLI tool and MCP server for Mistral API with queueing and rate limiting"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "mcp[cli]>=1.0.0,<2",
     "mistralai>=1.0.0,<2",
-    "httpx>=0.25.0",
-    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
+catalog = [
+    "httpx>=0.25.0",
+    "PyYAML>=6.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",

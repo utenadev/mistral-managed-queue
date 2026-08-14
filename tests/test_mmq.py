@@ -37,6 +37,14 @@ except Exception:
     mod.Mistral = MagicMock(name="Mistral")
     sys.modules["mistralai"] = mod
 
+
+# Check for optional catalog dependencies
+try:
+    import httpx  # noqa: F401
+    import yaml  # noqa: F401
+    _HAS_CATALOG_DEPS = True
+except ImportError:
+    _HAS_CATALOG_DEPS = False
 from mmq.core import (
     BASE_WAIT_TIME,
     BACKOFF_MULTIPLIER,
@@ -689,6 +697,9 @@ class TestWorkerQueue:
 class TestCliWiring:
     """CLI subcommand wiring must not pass arguments in the wrong order or None."""
 
+    @pytest.mark.skipif(
+        not _HAS_CATALOG_DEPS, reason="requires mmq[catalog] (httpx+PyYAML)"
+    )
     def test_catalog_fetch_passes_document_to_writer(self, monkeypatch):
         """write_catalog_yaml(path, document) must receive (output, document)."""
         from types import SimpleNamespace
@@ -700,14 +711,17 @@ class TestCliWiring:
             return_value=SimpleNamespace(document=doc, errors=[], partial=False)
         )
         fake_write = MagicMock()
-        monkeypatch.setattr(cli, "fetch_catalog", fake_fetch)
-        monkeypatch.setattr(cli, "write_catalog_yaml", fake_write)
+        monkeypatch.setattr("mmq.catalog.fetch.fetch_catalog", fake_fetch)
+        monkeypatch.setattr("mmq.catalog.write.write_catalog_yaml", fake_write)
 
         args = cli._build_parser().parse_args(["catalog", "fetch", "-o", "out.yaml"])
         assert cli._resolve_args(args) == 0
         fake_write.assert_called_once_with("out.yaml", doc)
         assert fake_fetch.call_args.kwargs.get("validate") is True
 
+    @pytest.mark.skipif(
+        not _HAS_CATALOG_DEPS, reason="requires mmq[catalog] (httpx+PyYAML)"
+    )
     def test_catalog_fetch_no_validate_flag(self, monkeypatch):
         """`--no-validate` must reach fetch_catalog (not be silently ignored)."""
         from types import SimpleNamespace
@@ -718,8 +732,8 @@ class TestCliWiring:
             return_value=SimpleNamespace(document={}, errors=[], partial=False)
         )
         fake_write = MagicMock()
-        monkeypatch.setattr(cli, "fetch_catalog", fake_fetch)
-        monkeypatch.setattr(cli, "write_catalog_yaml", fake_write)
+        monkeypatch.setattr("mmq.catalog.fetch.fetch_catalog", fake_fetch)
+        monkeypatch.setattr("mmq.catalog.write.write_catalog_yaml", fake_write)
 
         args = cli._build_parser().parse_args(
             ["catalog", "fetch", "--no-validate", "-o", "out.yaml"]

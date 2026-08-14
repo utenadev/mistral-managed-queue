@@ -1,8 +1,8 @@
 """mistral-managed-queue - Mistral API queue with rate limiting.
 
 This package provides:
-- MCP server for Mistral API with priority queue and rate limiting
-- Catalog fetching for ORR-compatible provider/model YAML
+- MCP server for Mistral API with priority queue and rate limiting (lazy init)
+- Catalog fetching via mmq.catalog (optional: pip install mistral-managed-queue[catalog])
 
 New code should import from specific submodules:
     from mmq.catalog import fetch_catalog, write_catalog_yaml, ...
@@ -11,36 +11,14 @@ New code should import from specific submodules:
 
 __version__ = "0.2.0"
 
-# Re-export catalog module (only requires httpx and PyYAML)
-from mmq.catalog import (
-    SCHEMA_VERSION,
-    PROVIDER_OPENROUTER,
-    PROVIDER_NVIDIA_NIM,
-    PROVIDER_MISTRAL,
-    PriceStatus,
-    FetchResult,
-    fetch_catalog,
-    write_catalog_yaml,
-    default_catalog_path,
-    validate_catalog,
-)
+# Catalog module is available via mmq.catalog (requires httpx+PyYAML).
+# Install with: pip install mistral-managed-queue[catalog]
 
 # Re-export CLI main for console script
 from mmq.cli import main as cli_main
 
 __all__ = [
-    # Catalog exports
-    "SCHEMA_VERSION",
-    "PROVIDER_OPENROUTER",
-    "PROVIDER_NVIDIA_NIM",
-    "PROVIDER_MISTRAL",
-    "PriceStatus",
-    "FetchResult",
-    "fetch_catalog",
-    "write_catalog_yaml",
-    "default_catalog_path",
-    "validate_catalog",
-    # CLI exports
+    # Only core exports; catalog is available via mmq.catalog (extras).
     "cli_main",
     "__version__",
 ]
