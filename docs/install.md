@@ -19,6 +19,11 @@ description: Installation instructions for mistral-managed-queue
 ```bash
 # Install globally
 uv pip install mistral-managed-queue
+# pip install mistral-managed-queue
+
+# With catalog support (httpx + PyYAML):
+# uv pip install 'mistral-managed-queue[catalog]'
+# pip install 'mistral-managed-queue[catalog]'
 
 # Or run directly without installation
 uvx --from mistral-managed-queue mmq

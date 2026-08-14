@@ -59,7 +59,7 @@ tasks:
   catalog:fetch:
     desc: Fetch provider model catalogs -> models.yaml
     cmds:
-      - uv run mmq catalog fetch
+      - uv run --extra catalog mmq catalog fetch
 
   # --- git / release ---
 

@@ -54,7 +54,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 **Notes:**
 
  * Console script name is **`mmq`**. Wrong: `uvx mistral-managed-queue ...`. Right: `uvx --from mistral-managed-queue mmq ...`.
- * Dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`, `httpx>=0.25.0`, `PyYAML>=6.0` (pulled in by the package).
+ * Core dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. Catalog fetching needs `httpx` and `PyYAML` (install with `pip install mistral-managed-queue[catalog]`).
 
 ## Usage
 
@@ -115,9 +115,12 @@ mmq purge --id 42     # delete a specific task by ID
 
 ### 5. `catalog fetch` — fetch provider model catalogs
 
-Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral). Requires `httpx` and `PyYAML` (both installed as dependencies).
+Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral). Requires `httpx` and `PyYAML` (install with: `pip install mistral-managed-queue[catalog]`).
 
 ```bash
+# Install with catalog extras first (if not using full install)
+# pip install mistral-managed-queue[catalog]
+
 # Fetch from all enabled providers and write to ./models.yaml (default)
 mmq catalog fetch
 

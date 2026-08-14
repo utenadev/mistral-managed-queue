@@ -19,7 +19,7 @@ def _get_mcp():
     """Get or create the singleton FastMCP instance (lazy init)."""
     global _mcp_instance
     if _mcp_instance is None:
-        from mcp.server.fastmcp import Context, FastMCP
+        from mcp.server.fastmcp import FastMCP
 
         _mcp_instance = FastMCP("mistral-managed-queue")
 
@@ -31,8 +31,7 @@ def _get_mcp():
         async def ask_mistral(
             prompt: str,
             model: Optional[str] = None,
-            system_prompt: Optional[str] = None,
-            ctx: Context = None,
+            system_prompt: Optional[str] = None
         ) -> str:
             """Ask Mistral via MCP. Queues the request and waits for the result."""
             return await execute_mistral_queue_async(

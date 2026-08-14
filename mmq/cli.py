@@ -194,7 +194,10 @@ def _resolve_args(args: argparse.Namespace) -> int:
             try:
                 from .catalog.fetch import fetch_catalog
                 from .catalog.write import write_catalog_yaml
-            except ImportError:
+            except ImportError as _exc:
+                _missing = getattr(_exc, "name", "")
+                if _missing not in ("httpx", "yaml"):
+                    raise  # unexpected import error, not a missing dep
                 print(
                     "Catalog support not installed. Install it with: pip install mistral-managed-queue[catalog]",
                     file=sys.stderr,

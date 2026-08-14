@@ -11,14 +11,10 @@ New code should import from specific submodules:
 
 __version__ = "0.2.0"
 
-# Catalog module is available via mmq.catalog (requires httpx+PyYAML).
-# Install with: pip install mistral-managed-queue[catalog]
-
 # Re-export CLI main for console script
 from mmq.cli import main as cli_main
 
 __all__ = [
-    # Only core exports; catalog is available via mmq.catalog (extras).
     "cli_main",
     "__version__",
 ]

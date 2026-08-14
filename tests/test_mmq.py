@@ -45,6 +45,13 @@ try:
     _HAS_CATALOG_DEPS = True
 except ImportError:
     _HAS_CATALOG_DEPS = False
+
+# Check for MCP availability (e.g. for _get_mcp tests)
+try:
+    from mcp.server.fastmcp import FastMCP  # noqa: F401
+    _HAS_MCP = True
+except ImportError:
+    _HAS_MCP = False
 from mmq.core import (
     BASE_WAIT_TIME,
     BACKOFF_MULTIPLIER,
@@ -758,4 +765,47 @@ class TestCliWiring:
         assert cli._resolve_args(args) == 0
         assert calls["model"] == DEFAULT_MODEL
         assert "hi" in str(calls["messages"])
+
+    @pytest.mark.skipif(
+        not _HAS_MCP, reason="mcp package not installed"
+    )
+    def test_get_mcp_registers_tools(self):
+        """_get_mcp() must succeed and register both tools."""
+        from mmq.mcp_server import _get_mcp
+        mcp = _get_mcp()
+        assert mcp is not None
+        names = [t.name for t in mcp._tool_manager.list_tools()]
+        assert "ask_mistral" in names
+        assert "get_queue_status" in names
+
+    def test_catalog_fetch_without_extras_shows_guidance(self, capsys):
+        """Without catalog deps, mmq catalog fetch must print guidance and exit 1."""
+        from mmq import cli
+        import sys
+
+        # Simulate missing httpx: block the import and drop any cached catalog
+        # modules so `from .catalog.fetch import ...` actually fails.
+        saved = {}
+        for name in list(sys.modules):
+            if name.startswith("mmq.catalog"):
+                saved[name] = sys.modules.pop(name)
+
+        import builtins
+        orig_import = builtins.__import__
+
+        def _mock_import(name, *args, **kwargs):
+            if name == "httpx":
+                raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+            return orig_import(name, *args, **kwargs)
+
+        builtins.__import__ = _mock_import
+        try:
+            args = cli._build_parser().parse_args(["catalog", "fetch", "-o", "out.yaml"])
+            exit_code = cli._resolve_args(args)
+            assert exit_code == 1, f"expected 1, got {exit_code}"
+            err = capsys.readouterr().err
+            assert "mistral-managed-queue[catalog]" in err
+        finally:
+            builtins.__import__ = orig_import
+            sys.modules.update(saved)
 
