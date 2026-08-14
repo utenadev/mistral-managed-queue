@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
-"""Translate README.md (EN) → README.ja.md / README.fr.md via mmq.
+"""Translate markdown documentation via mmq queue.
 
-Preserves fenced code blocks (line-based FSM) and inline code. Uses the
-shared Mistral free-tier queue (``execute_mistral_queue_async``).
+Translates source files into locale variants (ja, fr) while preserving
+fenced code blocks and inline code.
 
 Usage (from repo root)::
 
     export MISTRAL_API_KEY=...
+    # Default: main README
     python scripts/translate_readme.py
+
+    # Specific docs
+    python scripts/translate_readme.py --include docs/README_MCP
+    python scripts/translate_readme.py --include docs/README_extras_Catalog
+
+    # Multiple docs
+    python scripts/translate_readme.py --include README --include docs/README_MCP
+
+    # Custom source / output dir
+    python scripts/translate_readme.py --src docs/README_MCP.md --output-dir docs/
+
     python scripts/translate_readme.py --lang ja
     python scripts/translate_readme.py --dry-run
 
@@ -30,21 +42,22 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-SRC = ROOT / "README.md"
-TARGETS = {
-    "ja": ROOT / "README.ja.md",
-    "fr": ROOT / "README.fr.md",
-}
+LOCALE_DIR = ROOT
 LANG_NAMES = {"ja": "Japanese", "fr": "French"}
+LANGS = sorted(LANG_NAMES)
 
-# Fixed language switcher (never sent to the model)
-SWITCHER = "[English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)"
+# Default source files: name -> (src_path, output_dir, has_switcher)
+DEFAULT_INCLUDES = {
+    "README": ("README.md", ROOT, True),
+    "docs/README_MCP": ("docs/README_MCP.md", ROOT / "docs", False),
+    "docs/README_extras_Catalog": ("docs/README_extras_Catalog.md", ROOT / "docs", False),
+}
 
-INLINE_CODE = re.compile(r"`[^`\n]+`")
-BLOCK_TOKEN = re.compile(r"<!-- MMQ_BLOCK_(\d+) -->")
+INLINE_CODE = re.compile(r'`[^`\n]+`')
+BLOCK_TOKEN = re.compile(r"<!-- MMQ_BLOCK_(d+) -->")
 PLACEHOLDER = "<!-- MMQ_BLOCK_{i} -->"
 
-SYSTEM = """You translate technical README markdown for a software project.
+SYSTEM = ("""You translate technical README markdown for a software project.
 Rules:
 - Translate prose only (headings, paragraphs, list items, table cells).
 - Do NOT translate: fenced code, inline code, URLs, model IDs, CLI flags,
@@ -54,7 +67,33 @@ Rules:
 - Keep markdown structure: same heading levels, list markers, table column counts.
 - Do not add a preamble or explanation. Output markdown only.
 - Leave the product name "mistral-managed-queue" and command "mmq" unchanged.
-"""
+""")
+
+
+def _src_path(src_arg: str, output_dir: Path) -> Path:
+    """Resolve source path from argument."""
+    p = Path(src_arg)
+    if p.is_absolute():
+        return p
+    return (output_dir / p).resolve() if output_dir else (ROOT / p).resolve()
+
+
+def _locale_path(src_path: Path, lang: str, output_dir: Path) -> Path:
+    """Build locale output path: e.g. README.md -> README.ja.md."""
+    stem = src_path.stem           # "README" or "README_MCP"
+    suffix = src_path.suffix       # ".md"
+    name = f"{stem}.{lang}{suffix}"
+    if output_dir:
+        return (output_dir / name).resolve()
+    return (src_path.parent / name).resolve()
+
+
+def _build_switcher(src_path: Path) -> str | None:
+    """Build language switcher line for the main README, or None for other docs."""
+    name = src_path.stem  # "README"
+    if name != "README":
+        return None
+    return "[English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)"
 
 
 def protect_fences(text: str) -> tuple[str, list[str]]:
@@ -83,7 +122,6 @@ def protect_fences(text: str) -> tuple[str, list[str]]:
             out.append(line)
 
     if in_fence and buf:
-        # Unclosed fence: keep as opaque block
         parts.append("".join(buf))
         out.append(f"{PLACEHOLDER.format(i=len(parts) - 1)}\n")
 
@@ -109,13 +147,11 @@ def protect(text: str) -> tuple[str, list[str]]:
 
 def restore(text: str, parts: list[str]) -> str:
     missing = [i for i in range(len(parts)) if PLACEHOLDER.format(i=i) not in text]
-    # Also accept if model stripped spaces in comment
     for i, block in enumerate(parts):
         token = PLACEHOLDER.format(i=i)
         if token in text:
             text = text.replace(token, block)
         else:
-            # try without surrounding whitespace variants
             alt = f"<!--MMQ_BLOCK_{i}-->"
             if alt in text:
                 text = text.replace(alt, block)
@@ -130,12 +166,15 @@ def restore(text: str, parts: list[str]) -> str:
     return text
 
 
-def assemble_output(h1_and_rest: str, translated_body: str) -> str:
-    """Rebuild file: H1, fixed switcher, rest of translation without duplicate H1/switcher."""
-    # translated_body may still contain H1 + content; strip leading H1 and switcher if present
+def assemble_output(
+    src_text: str, translated_body: str, switcher: str | None
+) -> str:
+    """Rebuild file: H1, optional language switcher, rest of translation."""
     lines = translated_body.splitlines(keepends=True)
     out: list[str] = []
     i = 0
+
+    # H1
     if lines and lines[0].startswith("# "):
         out.append(lines[0])
         i = 1
@@ -143,23 +182,24 @@ def assemble_output(h1_and_rest: str, translated_body: str) -> str:
             out.append(lines[i])
             i += 1
     else:
-        # fallback: use source H1 from h1_and_rest
-        src_lines = h1_and_rest.splitlines(keepends=True)
+        src_lines = src_text.splitlines(keepends=True)
         if src_lines:
             out.append(src_lines[0])
             if not out[0].endswith("\n"):
                 out[0] += "\n"
             out.append("\n")
 
-    out.append(SWITCHER + "\n")
-    out.append("\n")
+    # Language switcher (only for main README)
+    if switcher:
+        out.append(switcher + "\n")
+        out.append("\n")
 
-    # skip blank lines and a switcher line if model re-emitted them
+    # Skip blank lines and any duplicate switcher the model re-emitted
     while i < len(lines):
         if lines[i].strip() == "":
             i += 1
             continue
-        if "README.ja.md" in lines[i] and "README.fr.md" in lines[i]:
+        if switcher and "README.ja.md" in lines[i] and "README.fr.md" in lines[i]:
             i += 1
             continue
         break
@@ -170,19 +210,12 @@ def assemble_output(h1_and_rest: str, translated_body: str) -> str:
     return text
 
 
-def validate_markdown(text: str, _n_blocks: int = 0) -> None:
-    if SWITCHER not in text:
+def validate_markdown(text: str, switcher: str | None) -> None:
+    if switcher and switcher not in text:
         raise RuntimeError("Language switcher line missing or altered")
     fence_marks = text.count("```")
     if fence_marks % 2 != 0:
         raise RuntimeError(f"Unbalanced code fences (``` count={fence_marks})")
-    # Source README may document the *wrong* form as a counter-example; do not
-    # reject that. Require the correct form to appear at least once.
-    if "uvx --from mistral-managed-queue mmq" not in text:
-        raise RuntimeError(
-            "Expected correct entry-point form "
-            "`uvx --from mistral-managed-queue mmq` missing from output"
-        )
 
 
 async def translate_via_mmq(protected: str, lang: str) -> str:
@@ -221,21 +254,27 @@ def write_atomic(path: Path, content: str) -> None:
         raise
 
 
-async def run_one(lang: str, src: str, dry_run: bool) -> None:
-    path = TARGETS[lang]
-    print(f"→ {path.name} ({LANG_NAMES[lang]})")
-    # Drop switcher from source body before protect/translate
-    lines = src.splitlines(keepends=True)
-    body_lines: list[str] = []
-    for line in lines:
-        if "README.ja.md" in line and "README.fr.md" in line:
-            continue
-        body_lines.append(line)
-    body = "".join(body_lines)
+async def run_one(
+    src_path: Path, lang: str, dry_run: bool, output_dir: Path | None
+) -> None:
+    dst_path = _locale_path(src_path, lang, output_dir or src_path.parent)
+    switcher = _build_switcher(src_path)
+    print(f"→ {src_path.name} -> {dst_path.name} ({LANG_NAMES[lang]})")
 
-    protected, parts = protect(body)
+    src = src_path.read_text(encoding="utf-8")
+
+    # Drop language switcher from source (only for README)
+    if switcher:
+        lines = src.splitlines(keepends=True)
+        body_lines: list[str] = []
+        for line in lines:
+            if "README.ja.md" in line and "README.fr.md" in line:
+                continue
+            body_lines.append(line)
+        src = "".join(body_lines)
+
+    protected, parts = protect(src)
     raw = await translate_via_mmq(protected, lang)
-    # Strip markdown fences if model wrapped the whole answer
     raw = raw.strip()
     if raw.startswith("```") and raw.endswith("```"):
         raw_lines = raw.splitlines()
@@ -243,8 +282,8 @@ async def run_one(lang: str, src: str, dry_run: bool) -> None:
             raw = "\n".join(raw_lines[1:-1]) + ("\n" if raw.endswith("\n") else "")
 
     restored = restore(raw, parts)
-    final = assemble_output(body, restored)
-    validate_markdown(final, len(parts))
+    final = assemble_output(src, restored, switcher)
+    validate_markdown(final, switcher)
 
     if dry_run:
         print(final[:2000])
@@ -252,23 +291,35 @@ async def run_one(lang: str, src: str, dry_run: bool) -> None:
             print(f"… ({len(final)} bytes total, dry-run)")
         return
 
-    write_atomic(path, final)
-    print(f"  wrote {path} ({len(final)} bytes, {len(parts)} protected segments)")
+    write_atomic(dst_path, final)
+    print(f"  wrote {dst_path} ({len(final)} bytes, {len(parts)} protected segments)")
 
 
-async def amain(langs: list[str], dry_run: bool) -> int:
+async def amain(
+    includes: list[str], langs: list[str], dry_run: bool
+) -> int:
     if not os.environ.get("MISTRAL_API_KEY"):
         print("MISTRAL_API_KEY is not set", file=sys.stderr)
         return 1
-    if not SRC.exists():
-        print(f"missing {SRC}", file=sys.stderr)
-        return 1
-    src = SRC.read_text(encoding="utf-8")
-    for lang in langs:
-        if lang not in TARGETS:
-            print(f"unknown lang: {lang}", file=sys.stderr)
+
+    for include_name in includes:
+        if include_name not in DEFAULT_INCLUDES:
+            print(f"unknown include: {include_name}", file=sys.stderr)
+            print(f"available: {', '.join(sorted(DEFAULT_INCLUDES))}", file=sys.stderr)
             return 1
-        await run_one(lang, src, dry_run=dry_run)
+
+        src_rel, output_dir, _ = DEFAULT_INCLUDES[include_name]
+        src_path = ROOT / src_rel
+        if not src_path.exists():
+            print(f"missing {src_path}", file=sys.stderr)
+            return 1
+
+        for lang in langs:
+            if lang not in LANG_NAMES:
+                print(f"unknown lang: {lang}", file=sys.stderr)
+                return 1
+            await run_one(src_path, lang, dry_run, output_dir)
+
     return 0
 
 
@@ -281,10 +332,19 @@ def main() -> int:
     )
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
+        "--include",
+        action="append",
+        choices=sorted(DEFAULT_INCLUDES),
+        help=(
+            "Document to translate (repeatable). "
+            f"Default: all ({', '.join(sorted(DEFAULT_INCLUDES))})."
+        ),
+    )
+    p.add_argument(
         "--lang",
         action="append",
-        choices=sorted(TARGETS),
-        help="Language to generate (repeatable). Default: ja and fr.",
+        choices=LANGS,
+        help="Language to generate (repeatable). Default: all.",
     )
     p.add_argument(
         "--dry-run",
@@ -292,8 +352,9 @@ def main() -> int:
         help="Translate and print a preview; do not write files",
     )
     args = p.parse_args()
-    langs = args.lang or list(TARGETS.keys())
-    return asyncio.run(amain(langs, dry_run=args.dry_run))
+    includes = args.include or sorted(DEFAULT_INCLUDES)
+    langs = args.lang or LANGS
+    return asyncio.run(amain(includes, langs, dry_run=args.dry_run))
 
 
 if __name__ == "__main__":

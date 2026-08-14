@@ -17,7 +17,7 @@ SQLite（WALモード）と非同期キューイングを使用し、1つの進�
  * **ストリーミング・キャンセル処理**: Mistral APIレスポンスを内部でストリーミング（ツールは完全なテキストを返す）。クライアントによるキャンセル（`CancelledError`）時にタスクステータスをDBで更新。
  * **ローカル制御DB**: ユーザーごとの一時ディレクトリ下にモード`0700`で作成されるDB（パスは`MMQ_TEMP_DB_PATH`で上書き可能）。
  * **PyPI / uvx**: 一度インストールするか、エフェメラルに実行。エントリポイントは`mmq`。
- * **カタログ取得**: OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュ（`mmq catalog fetch`で実行。`pip install mistral-managed-queue[catalog]`が必要）。
+ * **カタログ取得** (extras): プロバイダのモデルカタログ取得 — [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) を参照
  * **無料プランに最適**: ドキュメント翻訳などの、専用のレート制限スタックを消費せずに約31秒間隔で待機できるジョブに適しています。
 
 ## 前提条件
@@ -118,103 +118,7 @@ mmq purge --id 42     # delete a specific task by ID
 ```
 
 
-### 5. `catalog fetch` — プロバイダーのモデルカタログを取得
-
-OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュします。`pip install mistral-managed-queue[catalog]` が必要です。
-
-```bash
-# Fetch from all enabled providers and write to ./models.yaml (default)
-mmq catalog fetch
-
-# Specify output file
-mmq catalog fetch -o ./my-catalog.yaml
-
-# Skip validation
-mmq catalog fetch --no-validate
-```
-
-
-カタログ取得は独自のレート制限を使用し、チャットAPIとは独立して`MMQ_CATALOG_BASE_WAIT_TIME`と`MMQ_CATALOG_MAX_WAIT_TIME`で調整されます。未設定時は`MMQ_BASE_WAIT_TIME` / `MMQ_MAX_WAIT_TIME`にフォールバックします。
-
-### 6. `mcp` — MCPサーバー制御
-
-MCPが有効な場合のみ利用可能（`MMQ_ENABLE_MCP=true`を設定）。
-
-```bash
-MMQ_ENABLE_MCP=true mmq mcp run      # start the MCP server
-MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
-```
-
-
-### 7. MCPサーバーモード（Vibe / Grok / Claude Desktop / …）
-
-MCPホストに**`ask_mistral`**と**`get_queue_status`**を公開します。
-
-MCPは**オプション**: ホスト環境で`MMQ_ENABLE_MCP=true`を設定（値: `1` / `true` / `yes` / `on`）、その後`mmq mcp run`を実行します。
-
-#### PyPI / uvx（推奨）
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "uvx",
-      "args": ["--from", "mistral-managed-queue", "mmq", "mcp", "run"],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-
-既に`mmq`が`PATH`（venv / `uv pip install`）にインストールされている場合:
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "mmq",
-      "args": ["mcp", "run"],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-
-#### ローカルチェックアウト（開発）
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with", "mcp[cli]>=1.0.0,<2",
-        "--with", "mistralai>=1.0.0,<2",
-        "--no-project",
-        "python", "-m", "mmq.cli", "mcp", "run"
-      ],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-
-設定変更後はクライアントを再起動してください。Vibe手動チェックリスト: [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md)。
-
-### 3. 環境変数（オプション）
+## 環境変数（オプション）
 
 | 変数 | デフォルト | 用途 |
 |---|---|---|
@@ -232,33 +136,6 @@ MCPは**オプション**: ホスト環境で`MMQ_ENABLE_MCP=true`を設定（�
 | `MMQ_FAKE_API` | オフ | オフライン / e2e: フェイククライアント（`1`/`true`） |
 | `MMQ_FAKE_RESPONSE` | — | 固定フェイクレスポンストext（テスト用） |
 | `MMQ_FAKE_FAIL` | — | `429`または`error`で障害をシミュレート（テスト用） |
-
-### MCPツール
-
-サーバー実行中は、クライアントが以下のツールを使用できます:
-
-#### `ask_mistral`
-
-| 引数 | 型 | デフォルト | 説明 |
-|---|---|---|---|
-| prompt | string | 必須 | ユーザープロンプトテキスト |
-| model | string | `"mistral-small-latest"` | Mistralモデル名 |
-| system_prompt | string | null | カスタムシステムプロンプト |
-
-#### `get_queue_status`
-
-現在の共有キューのステータスをJSONで返します:
-
-| フィールド | 型 | 説明 |
-|---|---|---|
-| pending | number | キュー内の保留タスク数 |
-| processing | number | 現在処理中のタスク数 |
-| completed | number | 完了したタスク数 |
-| failed | number | 失敗したタスク数 |
-| total | number | タスク総数 |
-| seconds_until_next_slot | number | レートゲートで次のスロットが許可されるまでの秒数 |
-| current_wait_interval | number | 現在の共有待機間隔（バックオフ後） |
-| in_flight | boolean | いずれかのタスクが現在処理中かどうか |
 
 ## 制御データの保存場所
 

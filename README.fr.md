@@ -57,7 +57,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 **Remarques :**
 
  * Le nom du script console est **`mmq`**. Incorrect : `uvx mistral-managed-queue ...`. Correct : `uvx --from mistral-managed-queue mmq ...`.
- * Dépendances de base : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. La récupération du catalogue nécessite `httpx` et `PyYAML` (`pip install mistral-managed-queue[catalog]`).
+ * Dépendances de base : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. La récupération du catalogue nécessite `pip install mistral-managed-queue[catalog]` est nécessaire.
 
 ## Utilisation
 
@@ -120,103 +120,7 @@ mmq purge --id 42     # delete a specific task by ID
 ```
 
 
-### 5. `catalog fetch` — récupération des catalogues de modèles des fournisseurs
-
-Récupère et met en cache les catalogues de modèles auprès des fournisseurs (OpenRouter, NVIDIA NIM, Mistral). Nécessite `pip install mistral-managed-queue[catalog]`).
-
-```bash
-# Fetch from all enabled providers and write to ./models.yaml (default)
-mmq catalog fetch
-
-# Specify output file
-mmq catalog fetch -o ./my-catalog.yaml
-
-# Skip validation
-mmq catalog fetch --no-validate
-```
-
-
-La récupération du catalogue utilise sa propre limitation de débit, réglée indépendamment de l'API de chat via `MMQ_CATALOG_BASE_WAIT_TIME` et `MMQ_CATALOG_MAX_WAIT_TIME`. Si non définis, ils reviennent à `MMQ_BASE_WAIT_TIME` / `MMQ_MAX_WAIT_TIME`.
-
-### 6. `mcp` — contrôle du serveur MCP
-
-Uniquement disponible lorsque le MCP est activé (définir `MMQ_ENABLE_MCP=true`).
-
-```bash
-MMQ_ENABLE_MCP=true mmq mcp run      # start the MCP server
-MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
-```
-
-
-### 7. Mode serveur MCP (Vibe / Grok / Claude Desktop / …)
-
-Expose **`ask_mistral`** et **`get_queue_status`** aux hôtes MCP.
-
-Le MCP est **optionnel :** définissez `MMQ_ENABLE_MCP=true` (valeurs : `1` / `true` / `yes` / `on`) dans l'environnement de l'hôte, puis exécutez `mmq mcp run`.
-
-#### PyPI / uvx (recommandé)
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "uvx",
-      "args": ["--from", "mistral-managed-queue", "mmq", "mcp", "run"],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-
-Si `mmq` est déjà sur `PATH` (venv / `uv pip install`) :
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "mmq",
-      "args": ["mcp", "run"],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-
-#### Vérification locale (développement)
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with", "mcp[cli]>=1.0.0,<2",
-        "--with", "mistralai>=1.0.0,<2",
-        "--no-project",
-        "python", "-m", "mmq.cli", "mcp", "run"
-      ],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-
-Après avoir modifié la configuration, redémarrez le client. Liste de vérification manuelle Vibe : [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
-
-### 3. Variables d'environnement (optionnelles)
+## Variables d'environnement (optionnelles)
 
 | Variable | Valeur par défaut | Objectif |
 |---|---|---|
@@ -234,33 +138,6 @@ Après avoir modifié la configuration, redémarrez le client. Liste de vérific
 | `MMQ_FAKE_API` | désactivé | Hors ligne / e2e : client factice (`1`/`true`) |
 | `MMQ_FAKE_RESPONSE` | — | Texte de réponse factice fixe (tests) |
 | `MMQ_FAKE_FAIL` | — | `429` ou `error` pour simuler une défaillance (tests) |
-
-### Outils MCP
-
-Lorsque le serveur est en cours d'exécution, les clients peuvent utiliser les outils suivants :
-
-#### `ask_mistral`
-
-| Argument | Type | Valeur par défaut | Description |
-|---|---|---|---|
-| prompt | chaîne de caractères | requis | Texte de l'invite utilisateur |
-| model | chaîne de caractères | `"mistral-small-latest"` | Nom du modèle Mistral |
-| system_prompt | chaîne de caractères | null | Invite système personnalisée |
-
-#### `get_queue_status`
-
-Retourne l'état actuel de la file d'attente partagée au format JSON :
-
-| Champ | Type | Description |
-|---|---|---|
-| pending | nombre | Tâches en attente dans la file |
-| processing | nombre | Tâches actuellement réclamées / en cours d'exécution |
-| completed | nombre | Tâches terminées |
-| failed | nombre | Tâches échouées |
-| total | nombre | Tâches totales |
-| seconds_until_next_slot | nombre | Secondes avant que la porte de débit n'accorde le prochain créneau |
-| current_wait_interval | nombre | Intervalle d'attente partagé actuel (après repli) |
-| in_flight | booléen | Vrai si une tâche est actuellement en cours de traitement |
 
 ## Emplacement des données de contrôle
 

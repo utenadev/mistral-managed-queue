@@ -17,7 +17,7 @@ It uses SQLite (WAL mode) and async queueing with a single in-flight task to spa
  * **Streaming & cancel handling**: Streams the Mistral API response internally (the tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
  * **Local control DB**: Temp DB under a per-user directory with mode `0700` (path overridable via `MMQ_TEMP_DB_PATH`).
  * **PyPI / uvx**: Install once or run ephemerally; entry point is `mmq`.
- * **Catalog fetching**: Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral) with `mmq catalog fetch` (requires `pip install mistral-managed-queue[catalog]`).
+ * **Catalog fetching** (extras): Fetch provider model catalogs — see [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md).
  * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
 
 ## Prerequisites
@@ -58,7 +58,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 
 ## Usage
 
-The CLI is subcommand-based: `mmq ask`, `mmq fetch`, `mmq work`, `mmq purge`, `mmq catalog`, `mmq mcp`.
+The CLI is subcommand-based: `mmq ask`, `mmq fetch`, `mmq work`, `mmq purge`. See also `mmq catalog` (extras) and `mmq mcp` (opt-in).
 
 ### 1. `ask` — direct API call (bypasses the queue)
 
@@ -113,101 +113,7 @@ mmq purge --all       # delete every task (including completed/failed)
 mmq purge --id 42     # delete a specific task by ID
 ```
 
-### 5. `catalog fetch` — fetch provider model catalogs
-
-Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral). Requires `httpx` and `PyYAML` (install with: `pip install mistral-managed-queue[catalog]`).
-
-```bash
-# Install with catalog extras first (if not using full install)
-# pip install mistral-managed-queue[catalog]
-
-# Fetch from all enabled providers and write to ./models.yaml (default)
-mmq catalog fetch
-
-# Specify output file
-mmq catalog fetch -o ./my-catalog.yaml
-
-# Skip validation
-mmq catalog fetch --no-validate
-```
-
-Catalog fetching uses its own rate limiting, tuned independently from the chat API via `MMQ_CATALOG_BASE_WAIT_TIME` and `MMQ_CATALOG_MAX_WAIT_TIME`. If unset, they fall back to `MMQ_BASE_WAIT_TIME` / `MMQ_MAX_WAIT_TIME`.
-
-### 6. `mcp` — MCP server control
-
-Only available when MCP is enabled (set `MMQ_ENABLE_MCP=true`).
-
-```bash
-MMQ_ENABLE_MCP=true mmq mcp run      # start the MCP server
-MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
-```
-
-### 7. MCP server mode (Vibe / Grok / Claude Desktop / …)
-
-Expose **`ask_mistral`** and **`get_queue_status`** to MCP hosts.
-
-MCP is **opt-in**: set `MMQ_ENABLE_MCP=true` (values: `1` / `true` / `yes` / `on`) in the host environment, then run `mmq mcp run`.
-
-#### PyPI / uvx (recommended)
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "uvx",
-      "args": ["--from", "mistral-managed-queue", "mmq", "mcp", "run"],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-If `mmq` is already on `PATH` (venv / `uv pip install`):
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "mmq",
-      "args": ["mcp", "run"],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-#### Local checkout (development)
-
-```json
-{
-  "mcpServers": {
-    "mistral-managed-queue": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with", "mcp[cli]>=1.0.0,<2",
-        "--with", "mistralai>=1.0.0,<2",
-        "--no-project",
-        "python", "-m", "mmq.cli", "mcp", "run"
-      ],
-      "env": {
-        "MMQ_ENABLE_MCP": "true",
-        "MISTRAL_API_KEY": "your-mistral-api-key"
-      }
-    }
-  }
-}
-```
-
-After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md).
-
-### 3. Environment variables (optional)
+## Environment variables (optional)
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -219,39 +125,13 @@ After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VI
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | Backoff multiplier on 429 |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | Zombie task timeout (seconds) |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Default model name |
-| `MMQ_ENABLE_MCP` | off | Enable MCP server / `mcp` subcommands (`1`/`true`) |
-| `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | Catalog fetch pacing |
+| `MMQ_ENABLE_MCP` | off | Enable MCP server — see [docs/README_MCP.md](docs/README_MCP.md) |
+| `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | Catalog fetch pacing — see [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) |
 | `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | Catalog fetch max backoff |
 | `MMQ_FAKE_API` | off | Offline / e2e: fake client (`1`/`true`) |
 | `MMQ_FAKE_RESPONSE` | — | Fixed fake response text (testing) |
 | `MMQ_FAKE_FAIL` | — | `429` or `error` to simulate failure (testing) |
 
-### MCP tools
-
-When the server is running, clients can use the following tools:
-
-#### `ask_mistral`
-
-| Argument | Type | Default | Description |
-|---|---|---|---|
-| prompt | string | required | User prompt text |
-| model | string | `"mistral-small-latest"` | Mistral model name |
-| system_prompt | string | null | Custom system prompt |
-
-#### `get_queue_status`
-
-Returns current shared queue status as JSON:
-
-| Field | Type | Description |
-|---|---|---|
-| pending | number | Tasks waiting in the queue |
-| processing | number | Tasks currently claimed / running |
-| completed | number | Tasks finished |
-| failed | number | Tasks failed |
-| total | number | Total tasks |
-| seconds_until_next_slot | number | Seconds until the rate gate grants the next slot |
-| current_wait_interval | number | Current shared wait interval (after backoff) |
-| in_flight | boolean | True if any task is currently processing |
 
 ## Control data location
 
@@ -330,6 +210,8 @@ Thank you all!
 
 ## Further docs
 
+ * [docs/README_MCP.md](docs/README_MCP.md) — MCP server setup and configuration
+ * [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) — Catalog fetching (extras)
  * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Vibe / MCP manual smoke
  * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — where web search belongs (outside mmq base)
  * [docs/tasks.md](docs/tasks.md) — backlog
