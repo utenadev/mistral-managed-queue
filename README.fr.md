@@ -208,7 +208,7 @@ Utilisez-le comme modèle pour d'autres tâches par lots peu fréquentes (résum
 
 - **sioois** pour le partage d'informations sur l'offre gratuite de l'API Mistral
 ([lien](https://zenn.dev/sioois/articles/dea773011514b1)).
-- **@fujibee** pour avoir fourni des informations sur l'utilisation des files d'attente avec le mode WAL de SQLite (#agmsg).
+- **@fujibee** pour avoir fourni des informations sur l'utilisation des files d'attente avec le mode WAL de SQLite (#agmsg (https://github.com/fujibee/agmsg)).
 - **shunsuke_suzuki** pour la méthodologie de développement de CLI adaptée à l'IA
 ([lien](https://zenn.dev/shunsuke_suzuki/articles/make-cli-ai-friendly)).
 

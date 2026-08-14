@@ -206,7 +206,7 @@ python scripts/translate_readme.py --dry-run    # preview, no write
 
 - Mistral API無料プランに関する情報を共有してくれた**sioois**氏
 ([リンク](https://zenn.dev/sioois/articles/dea773011514b1))。
-- SQLite WALモードでのキュー利用に関する知見を提供してくれた**@fujibee**氏（#agmsg）。
+- SQLite WALモードでのキュー利用に関する知見を提供してくれた**@fujibee**氏（#agmsg (https://github.com/fujibee/agmsg)）。
 - AIに優しいCLI開発手法を提供してくれた**shunsuke_suzuki**氏
 ([リンク](https://zenn.dev/shunsuke_suzuki/articles/make-cli-ai-friendly))。
 

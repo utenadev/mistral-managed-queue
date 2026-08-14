@@ -202,7 +202,7 @@ Use it as a template for other infrequent batch jobs (summaries, structured extr
 
 - **sioois** for sharing information about the Mistral API free tier
 ([link](https://zenn.dev/sioois/articles/dea773011514b1)).
-- **@fujibee** for providing insights on using queues with SQLite WAL mode (#agmsg).
+- **@fujibee** for providing insights on using queues with SQLite WAL mode (#agmsg (https://github.com/fujibee/agmsg)).
 - **shunsuke_suzuki** for the AI-friendly CLI development methodology
 ([link](https://zenn.dev/shunsuke_suzuki/articles/make-cli-ai-friendly)).
 
