@@ -1,6 +1,7 @@
 """Tests for mistral-managed-queue core functionality."""
 
 import os
+import inspect
 import asyncio
 import sqlite3
 import sys
@@ -37,6 +38,23 @@ except Exception:
     mod.Mistral = MagicMock(name="Mistral")
     sys.modules["mistralai"] = mod
 
+
+# Check for optional catalog dependencies
+try:
+    import httpx  # noqa: F401
+    import yaml  # noqa: F401
+    _HAS_CATALOG_DEPS = True
+except ImportError:
+    _HAS_CATALOG_DEPS = False
+
+# Check for MCP availability (e.g. for _get_mcp tests).
+# The stubs above inject MagicMock, so verify we got a real class:
+# a MagicMock would make the real registration test meaningless.
+try:
+    from mcp.server.fastmcp import FastMCP  # noqa: F401
+    _HAS_MCP = inspect.isclass(FastMCP) and FastMCP.__module__.startswith("mcp.")
+except ImportError:
+    _HAS_MCP = False
 from mmq.core import (
     BASE_WAIT_TIME,
     BACKOFF_MULTIPLIER,
@@ -689,6 +707,9 @@ class TestWorkerQueue:
 class TestCliWiring:
     """CLI subcommand wiring must not pass arguments in the wrong order or None."""
 
+    @pytest.mark.skipif(
+        not _HAS_CATALOG_DEPS, reason="requires mmq[catalog] (httpx+PyYAML)"
+    )
     def test_catalog_fetch_passes_document_to_writer(self, monkeypatch):
         """write_catalog_yaml(path, document) must receive (output, document)."""
         from types import SimpleNamespace
@@ -700,14 +721,17 @@ class TestCliWiring:
             return_value=SimpleNamespace(document=doc, errors=[], partial=False)
         )
         fake_write = MagicMock()
-        monkeypatch.setattr(cli, "fetch_catalog", fake_fetch)
-        monkeypatch.setattr(cli, "write_catalog_yaml", fake_write)
+        monkeypatch.setattr("mmq.catalog.fetch.fetch_catalog", fake_fetch)
+        monkeypatch.setattr("mmq.catalog.write.write_catalog_yaml", fake_write)
 
         args = cli._build_parser().parse_args(["catalog", "fetch", "-o", "out.yaml"])
         assert cli._resolve_args(args) == 0
         fake_write.assert_called_once_with("out.yaml", doc)
         assert fake_fetch.call_args.kwargs.get("validate") is True
 
+    @pytest.mark.skipif(
+        not _HAS_CATALOG_DEPS, reason="requires mmq[catalog] (httpx+PyYAML)"
+    )
     def test_catalog_fetch_no_validate_flag(self, monkeypatch):
         """`--no-validate` must reach fetch_catalog (not be silently ignored)."""
         from types import SimpleNamespace
@@ -718,8 +742,8 @@ class TestCliWiring:
             return_value=SimpleNamespace(document={}, errors=[], partial=False)
         )
         fake_write = MagicMock()
-        monkeypatch.setattr(cli, "fetch_catalog", fake_fetch)
-        monkeypatch.setattr(cli, "write_catalog_yaml", fake_write)
+        monkeypatch.setattr("mmq.catalog.fetch.fetch_catalog", fake_fetch)
+        monkeypatch.setattr("mmq.catalog.write.write_catalog_yaml", fake_write)
 
         args = cli._build_parser().parse_args(
             ["catalog", "fetch", "--no-validate", "-o", "out.yaml"]
@@ -744,4 +768,47 @@ class TestCliWiring:
         assert cli._resolve_args(args) == 0
         assert calls["model"] == DEFAULT_MODEL
         assert "hi" in str(calls["messages"])
+
+    @pytest.mark.skipif(
+        not _HAS_MCP, reason="mcp package not installed"
+    )
+    def test_get_mcp_registers_tools(self):
+        """_get_mcp() must succeed and register both tools."""
+        from mmq.mcp_server import _get_mcp
+        mcp = _get_mcp()
+        assert mcp is not None
+        names = [t.name for t in mcp._tool_manager.list_tools()]
+        assert "ask_mistral" in names
+        assert "get_queue_status" in names
+
+    def test_catalog_fetch_without_extras_shows_guidance(self, capsys):
+        """Without catalog deps, mmq catalog fetch must print guidance and exit 1."""
+        from mmq import cli
+        import sys
+
+        # Simulate missing httpx: block the import and drop any cached catalog
+        # modules so `from .catalog.fetch import ...` actually fails.
+        saved = {}
+        for name in list(sys.modules):
+            if name.startswith("mmq.catalog"):
+                saved[name] = sys.modules.pop(name)
+
+        import builtins
+        orig_import = builtins.__import__
+
+        def _mock_import(name, *args, **kwargs):
+            if name == "httpx":
+                raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+            return orig_import(name, *args, **kwargs)
+
+        builtins.__import__ = _mock_import
+        try:
+            args = cli._build_parser().parse_args(["catalog", "fetch", "-o", "out.yaml"])
+            exit_code = cli._resolve_args(args)
+            assert exit_code == 1, f"expected 1, got {exit_code}"
+            err = capsys.readouterr().err
+            assert "mistral-managed-queue[catalog]" in err
+        finally:
+            builtins.__import__ = orig_import
+            sys.modules.update(saved)
 

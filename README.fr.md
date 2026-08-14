@@ -17,7 +17,7 @@ Il utilise SQLite (mode WAL) et une file d'attente asynchrone avec une seule tâ
  * **Streaming et gestion des annulations :** Stream la réponse de l'API Mistral en interne (l'outil retourne le texte complet) ; en cas d'annulation côté client (`CancelledError`), met à jour le statut de la tâche dans la base de données.
  * **Base de données de contrôle locale :** Base de données temporaire dans un répertoire par utilisateur avec le mode `0700` (le chemin peut être remplacé via `MMQ_TEMP_DB_PATH`).
  * **PyPI / uvx :** Installation unique ou exécution éphémère ; point d'entrée `mmq`.
- * **Récupération du catalogue :** Récupère et met en cache les catalogues de modèles auprès des fournisseurs (OpenRouter, NVIDIA NIM, Mistral) avec `mmq catalog fetch` (nécessite `httpx` et `PyYAML`, tous deux installés comme dépendances).
+ * **Récupération du catalogue :** Récupère et met en cache les catalogues de modèles auprès des fournisseurs (OpenRouter, NVIDIA NIM, Mistral) avec `mmq catalog fetch` (nécessite `pip install mistral-managed-queue[catalog]`).
  * **Adapté à l'offre gratuite :** Tâches occasionnelles (par ex. traduction de documentation) qui peuvent attendre ~31 secondes entre les appels sans épuiser une pile dédiée de limites de débit.
 
 ## Prérequis
@@ -57,7 +57,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 **Remarques :**
 
  * Le nom du script console est **`mmq`**. Incorrect : `uvx mistral-managed-queue ...`. Correct : `uvx --from mistral-managed-queue mmq ...`.
- * Dépendances : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`, `httpx>=0.25.0`, `PyYAML>=6.0` (intégrées au package).
+ * Dépendances de base : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. La récupération du catalogue nécessite `httpx` et `PyYAML` (`pip install mistral-managed-queue[catalog]`).
 
 ## Utilisation
 
@@ -122,7 +122,7 @@ mmq purge --id 42     # delete a specific task by ID
 
 ### 5. `catalog fetch` — récupération des catalogues de modèles des fournisseurs
 
-Récupère et met en cache les catalogues de modèles auprès des fournisseurs (OpenRouter, NVIDIA NIM, Mistral). Nécessite `httpx` et `PyYAML` (tous deux installés comme dépendances).
+Récupère et met en cache les catalogues de modèles auprès des fournisseurs (OpenRouter, NVIDIA NIM, Mistral). Nécessite `pip install mistral-managed-queue[catalog]`).
 
 ```bash
 # Fetch from all enabled providers and write to ./models.yaml (default)

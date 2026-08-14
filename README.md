@@ -17,7 +17,7 @@ It uses SQLite (WAL mode) and async queueing with a single in-flight task to spa
  * **Streaming & cancel handling**: Streams the Mistral API response internally (the tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
  * **Local control DB**: Temp DB under a per-user directory with mode `0700` (path overridable via `MMQ_TEMP_DB_PATH`).
  * **PyPI / uvx**: Install once or run ephemerally; entry point is `mmq`.
- * **Catalog fetching**: Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral) with `mmq catalog fetch` (requires `httpx` and `PyYAML`, both installed as dependencies).
+ * **Catalog fetching**: Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral) with `mmq catalog fetch` (requires `pip install mistral-managed-queue[catalog]`).
  * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
 
 ## Prerequisites
@@ -54,7 +54,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 **Notes:**
 
  * Console script name is **`mmq`**. Wrong: `uvx mistral-managed-queue ...`. Right: `uvx --from mistral-managed-queue mmq ...`.
- * Dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`, `httpx>=0.25.0`, `PyYAML>=6.0` (pulled in by the package).
+ * Core dependencies: `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. Catalog fetching needs `httpx` and `PyYAML` (install with `pip install mistral-managed-queue[catalog]`).
 
 ## Usage
 
@@ -115,9 +115,12 @@ mmq purge --id 42     # delete a specific task by ID
 
 ### 5. `catalog fetch` — fetch provider model catalogs
 
-Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral). Requires `httpx` and `PyYAML` (both installed as dependencies).
+Fetch and cache model catalogs from providers (OpenRouter, NVIDIA NIM, Mistral). Requires `httpx` and `PyYAML` (install with: `pip install mistral-managed-queue[catalog]`).
 
 ```bash
+# Install with catalog extras first (if not using full install)
+# pip install mistral-managed-queue[catalog]
+
 # Fetch from all enabled providers and write to ./models.yaml (default)
 mmq catalog fetch
 

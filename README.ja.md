@@ -17,7 +17,7 @@ SQLite（WALモード）と非同期キューイングを使用し、1つの進�
  * **ストリーミング・キャンセル処理**: Mistral APIレスポンスを内部でストリーミング（ツールは完全なテキストを返す）。クライアントによるキャンセル（`CancelledError`）時にタスクステータスをDBで更新。
  * **ローカル制御DB**: ユーザーごとの一時ディレクトリ下にモード`0700`で作成されるDB（パスは`MMQ_TEMP_DB_PATH`で上書き可能）。
  * **PyPI / uvx**: 一度インストールするか、エフェメラルに実行。エントリポイントは`mmq`。
- * **カタログ取得**: OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュ（`mmq catalog fetch`で実行。依存関係として`httpx`と`PyYAML`が必要）。
+ * **カタログ取得**: OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュ（`mmq catalog fetch`で実行。`pip install mistral-managed-queue[catalog]`が必要）。
  * **無料プランに最適**: ドキュメント翻訳などの、専用のレート制限スタックを消費せずに約31秒間隔で待機できるジョブに適しています。
 
 ## 前提条件
@@ -57,7 +57,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 **注意**:
 
  * コンソールスクリプト名は**`mmq`**。誤: `uvx mistral-managed-queue ...`。正: `uvx --from mistral-managed-queue mmq ...`。
- * 依存関係: `mcp[cli]>=1.0.0,<2`、`mistralai>=1.0.0,<2`、`httpx>=0.25.0`、`PyYAML>=6.0`（パッケージに含まれています）。
+ * コア依存関係: `mcp[cli]>=1.0.0,<2`、`mistralai>=1.0.0,<2`。カタログ取得には `httpx` と `PyYAML` が必要（`pip install mistral-managed-queue[catalog]`）。
 
 ## 使用方法
 
@@ -120,7 +120,7 @@ mmq purge --id 42     # delete a specific task by ID
 
 ### 5. `catalog fetch` — プロバイダーのモデルカタログを取得
 
-OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュします。依存関係として`httpx`と`PyYAML`が必要です。
+OpenRouter、NVIDIA NIM、Mistralなどのプロバイダーからモデルカタログを取得しキャッシュします。`pip install mistral-managed-queue[catalog]` が必要です。
 
 ```bash
 # Fetch from all enabled providers and write to ./models.yaml (default)
