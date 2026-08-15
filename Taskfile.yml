@@ -17,7 +17,7 @@ tasks:
         python -m pytest tests/ -v -m "not live"
 
   readme:translate:
-    desc: README.md (EN) → ja + fr via mmq queue
+    desc: All docs (README + MCP + Catalog) → ja + fr via mmq queue
     cmds:
       - >-
         uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
@@ -37,6 +37,9 @@ tasks:
         uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
         --no-project python scripts/translate_readme.py --lang fr
 
+  # The translate tasks now cover all registered docs:
+  # README.md, docs/README_MCP.md, docs/README_extras_Catalog.md
+  # (controlled by --include flag in the script)
   readme:translate:dry:
     desc: Dry-run translation (no write)
     cmds:
