@@ -7,7 +7,7 @@
 Un outil CLI et un serveur MCP (Model Context Protocol) qui coordonne les appels locaux et multi-processus/multi-clients à l'offre gratuite de Mistral (~1 requête / 30 secondes) via une file d'attente partagée SQLite.
 Il utilise SQLite (mode WAL) et une file d'attente asynchrone avec une seule tâche en vol pour espacer les débuts de requêtes. Il s'agit d'un contrôle de trafic au mieux, et non d'un SLA officiel.
 
-**Package :** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) sur PyPI · **script console :** `mmq` (pas le nom du package) · **version actuelle :** `0.2.1`
+**Package :** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) sur PyPI · **script console :** `mmq` (pas le nom du package) · **version actuelle :** `0.2.2`
 
 ## Fonctionnalités
 

@@ -9,7 +9,7 @@ New code should import from specific submodules:
     from mmq.cli import main as cli_main
 """
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 # Re-export CLI main for console script
 from mmq.cli import main as cli_main

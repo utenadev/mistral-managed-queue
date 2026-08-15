@@ -7,7 +7,7 @@
 CLIツールおよびMCP（Model Context Protocol）サーバーで、SQLite共有キューを介してMistral無料プラン（約30秒に1リクエスト）へのローカルおよびマルチプロセス/マルチクライアント呼び出しを調整します。
 SQLite（WALモード）と非同期キューイングを使用し、1つの進行中タスクでリクエスト開始を間隔を空けて実行します。これはベストエフォートのトラフィック制御であり、公式のSLAではありません。
 
-**パッケージ:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **コンソールスクリプト名:** `mmq`（パッケージ名ではない）· **現在のリリース:** `0.2.1`
+**パッケージ:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **コンソールスクリプト名:** `mmq`（パッケージ名ではない）· **現在のリリース:** `0.2.2`
 
 ## 機能
 

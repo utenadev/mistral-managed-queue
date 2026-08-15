@@ -1,20 +1,18 @@
-<!-- TODO: translate this file via scripts/translate_readme.py --include mmq/README_MCP -->
+# MCPサーバー — mistral-managed-queue
 
-# MCP Server — mistral-managed-queue
+MCP（Model Context Protocol）サーバーは `ask_mistral` と `get_queue_status` を
+Vibe、Claude Desktop、Grok などの MCP ホストに公開します。
 
-The MCP (Model Context Protocol) server exposes `ask_mistral` and `get_queue_status`
-to MCP hosts such as Vibe, Claude Desktop, and Grok.
+MCP は **オプトイン** です。ホスト環境で `MMQ_ENABLE_MCP=true` を設定してください。
 
-MCP is **opt-in**: set `MMQ_ENABLE_MCP=true` in the host environment.
-
-## CLI Control
+## CLI 操作
 
 ```bash
 MMQ_ENABLE_MCP=true mmq mcp run      # start the MCP server
 MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
 ```
 
-## Configuration (PyPI / uvx — recommended)
+## 設定（PyPI / uvx — 推奨）
 
 ```json
 {
@@ -31,7 +29,7 @@ MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
 }
 ```
 
-If `mmq` is already on `PATH` (venv / `uv pip install`):
+`mmq` がすでに `PATH` にある場合（venv / `uv pip install`）:
 
 ```json
 {
@@ -48,7 +46,7 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 }
 ```
 
-## Local Checkout (development)
+## ローカルチェックアウト（開発）
 
 ```json
 {
@@ -71,29 +69,29 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 }
 ```
 
-After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VIBE.md](../docs/SMOKE_VIBE.md).
+設定変更後はクライアントを再起動してください。Vibe の手動チェックリスト: [docs/SMOKE_VIBE.md](../docs/SMOKE_VIBE.md)。
 
-## MCP Tools
+## MCP ツール
 
 ### `ask_mistral`
 
-| Argument | Type | Default | Description |
+| 引数 | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| prompt | string | required | User prompt text |
-| model | string | "mistral-small-latest" | Mistral model name |
-| system_prompt | string | null | Custom system prompt |
+| prompt | string | required | ユーザーのプロンプト本文 |
+| model | string | "mistral-small-latest" | Mistral モデル名 |
+| system_prompt | string | null | カスタムシステムプロンプト |
 
 ### `get_queue_status`
 
-Returns current shared queue status as JSON:
+現在の共有キュー状態を JSON で返します。
 
-| Field | Type | Description |
+| フィールド | 型 | 説明 |
 |---|---|---|
-| pending | number | Tasks waiting in the queue |
-| processing | number | Tasks currently claimed / running |
-| completed | number | Tasks finished |
-| failed | number | Tasks failed |
-| total | number | Total tasks |
-| seconds_until_next_slot | number | Seconds until the rate gate grants the next slot |
-| current_wait_interval | number | Current shared wait interval (after backoff) |
-| in_flight | boolean | True if any task is currently processing |
+| pending | number | キュー待ちのタスク数 |
+| processing | number | 現在 claim / 実行中のタスク数 |
+| completed | number | 完了したタスク数 |
+| failed | number | 失敗したタスク数 |
+| total | number | タスク総数 |
+| seconds_until_next_slot | number | レートゲートが次スロットを開けるまでの秒数 |
+| current_wait_interval | number | 現在の共有待機間隔（バックオフ後） |
+| in_flight | boolean | いずれかのタスクが処理中なら True |

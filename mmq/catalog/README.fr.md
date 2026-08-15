@@ -1,9 +1,7 @@
-<!-- TODO: translate this file via scripts/translate_readme.py --include mmq/catalog -->
+# Catalogue — mistral-managed-queue (extras)
 
-# Catalog — mistral-managed-queue (extras)
-
-The catalog feature fetches model lists from LLM providers and writes them as
-ORR-compatible YAML. It supports three providers:
+La fonction catalogue récupère les listes de modèles auprès des fournisseurs de LLM
+et les écrit au format YAML compatible ORR. Trois fournisseurs sont pris en charge :
 
 - [OpenRouter](https://openrouter.ai)
 - [NVIDIA NIM](https://build.nvidia.com/)
@@ -11,7 +9,7 @@ ORR-compatible YAML. It supports three providers:
 
 ## Installation
 
-This feature requires extra dependencies (`httpx` + `PyYAML`):
+Cette fonctionnalité nécessite des dépendances supplémentaires (`httpx` + `PyYAML`) :
 
 ```bash
 # pip
@@ -21,7 +19,7 @@ pip install 'mistral-managed-queue[catalog]'
 uv pip install 'mistral-managed-queue[catalog]'
 ```
 
-## Usage
+## Utilisation
 
 ```bash
 # Fetch from all enabled providers and write to ./models.yaml (default)
@@ -34,13 +32,14 @@ mmq catalog fetch -o ./my-catalog.yaml
 mmq catalog fetch --no-validate
 ```
 
-Catalog fetching uses its own rate limiting, tuned independently from the chat API
-via `MMQ_CATALOG_BASE_WAIT_TIME` and `MMQ_CATALOG_MAX_WAIT_TIME`. If unset, they fall
-back to `MMQ_BASE_WAIT_TIME` / `MMQ_MAX_WAIT_TIME`.
+La récupération du catalogue utilise sa propre limitation de débit, réglée
+indépendamment de l'API de chat via `MMQ_CATALOG_BASE_WAIT_TIME` et
+`MMQ_CATALOG_MAX_WAIT_TIME`. Si elles ne sont pas définies, elles retombent
+sur `MMQ_BASE_WAIT_TIME` / `MMQ_MAX_WAIT_TIME`.
 
-## Providers
+## Fournisseurs
 
-| Provider | Plugin | API Key Env | Models List |
+| Fournisseur | Plugin | Variable de clé API | Liste des modèles |
 |---|---|---|---|
 | OpenRouter | `OpenRouterPlugin` | `OPENROUTER_API_KEY` | `/api/v1/models` |
 | NVIDIA NIM | `NvidiaNimPlugin` | `NVIDIA_API_KEY` | `/v1/models` |

@@ -1,20 +1,18 @@
-<!-- TODO: translate this file via scripts/translate_readme.py --include mmq/README_MCP -->
+# Serveur MCP — mistral-managed-queue
 
-# MCP Server — mistral-managed-queue
+Le serveur MCP (Model Context Protocol) expose `ask_mistral` et `get_queue_status`
+aux hôtes MCP tels que Vibe, Claude Desktop et Grok.
 
-The MCP (Model Context Protocol) server exposes `ask_mistral` and `get_queue_status`
-to MCP hosts such as Vibe, Claude Desktop, and Grok.
+MCP est **opt-in** : définissez `MMQ_ENABLE_MCP=true` dans l'environnement de l'hôte.
 
-MCP is **opt-in**: set `MMQ_ENABLE_MCP=true` in the host environment.
-
-## CLI Control
+## Contrôle CLI
 
 ```bash
 MMQ_ENABLE_MCP=true mmq mcp run      # start the MCP server
 MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
 ```
 
-## Configuration (PyPI / uvx — recommended)
+## Configuration (PyPI / uvx — recommandé)
 
 ```json
 {
@@ -31,7 +29,7 @@ MMQ_ENABLE_MCP=true mmq mcp status   # show MCP availability
 }
 ```
 
-If `mmq` is already on `PATH` (venv / `uv pip install`):
+Si `mmq` est déjà dans le `PATH` (venv / `uv pip install`) :
 
 ```json
 {
@@ -48,7 +46,7 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 }
 ```
 
-## Local Checkout (development)
+## Checkout local (développement)
 
 ```json
 {
@@ -71,29 +69,29 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 }
 ```
 
-After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VIBE.md](../docs/SMOKE_VIBE.md).
+Après modification de la configuration, redémarrez le client. Liste de contrôle Vibe manuelle : [docs/SMOKE_VIBE.md](../docs/SMOKE_VIBE.md).
 
-## MCP Tools
+## Outils MCP
 
 ### `ask_mistral`
 
-| Argument | Type | Default | Description |
+| Argument | Type | Défaut | Description |
 |---|---|---|---|
-| prompt | string | required | User prompt text |
-| model | string | "mistral-small-latest" | Mistral model name |
-| system_prompt | string | null | Custom system prompt |
+| prompt | string | required | Texte de l'invite utilisateur |
+| model | string | "mistral-small-latest" | Nom du modèle Mistral |
+| system_prompt | string | null | Invite système personnalisée |
 
 ### `get_queue_status`
 
-Returns current shared queue status as JSON:
+Renvoie l'état actuel de la file partagée au format JSON :
 
-| Field | Type | Description |
+| Champ | Type | Description |
 |---|---|---|
-| pending | number | Tasks waiting in the queue |
-| processing | number | Tasks currently claimed / running |
-| completed | number | Tasks finished |
-| failed | number | Tasks failed |
-| total | number | Total tasks |
-| seconds_until_next_slot | number | Seconds until the rate gate grants the next slot |
-| current_wait_interval | number | Current shared wait interval (after backoff) |
-| in_flight | boolean | True if any task is currently processing |
+| pending | number | Tâches en attente dans la file |
+| processing | number | Tâches actuellement revendiquées / en cours |
+| completed | number | Tâches terminées |
+| failed | number | Tâches en échec |
+| total | number | Nombre total de tâches |
+| seconds_until_next_slot | number | Secondes avant que la porte de débit n'accorde le prochain créneau |
+| current_wait_interval | number | Intervalle d'attente partagé actuel (après repli) |
+| in_flight | boolean | Vrai si une tâche est actuellement en cours de traitement |
