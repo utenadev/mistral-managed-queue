@@ -21,8 +21,10 @@ rate limiting (free-tier ~1 req/30s) via SQLite (WAL mode). Package layout under
     `mmq work` worker, which claims pending tasks **by priority (DESC) then FIFO**.
 - `mmq/cli.py` — subcommands: `ask`, `fetch`, `work`, `purge`, `catalog fetch`, `mcp`, `--mcp`.
 - `mmq/mcp_server.py` — FastMCP server; tools `ask_mistral`, `get_queue_status`.
+- `mmq/README_MCP.md` — MCP host setup (opt-in; ja/fr siblings alongside).
 - `mmq/catalog/` — ORR-compatible catalog fetch/validate/write (`fetch.py`, `validate.py`,
   `write.py`, `types.py`). `write_catalog_yaml(path, document)` (order matters).
+  Feature docs: `mmq/catalog/README.md` (ja/fr siblings).
 - `mmq/__init__.py` — `__version__` + re-exports. **Version is kept in sync with
   `pyproject.toml`** (currently `0.2.1`).
 

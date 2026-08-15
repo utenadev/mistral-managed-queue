@@ -17,7 +17,7 @@ SQLite（WALモード）と非同期キューイングを使用し、1つの進�
  * **ストリーミング・キャンセル処理**: Mistral APIレスポンスを内部でストリーミング（ツールは完全なテキストを返す）。クライアントによるキャンセル（`CancelledError`）時にタスクステータスをDBで更新。
  * **ローカル制御DB**: ユーザーごとの一時ディレクトリ下にモード`0700`で作成されるDB（パスは`MMQ_TEMP_DB_PATH`で上書き可能）。
  * **PyPI / uvx**: 一度インストールするか、エフェメラルに実行。エントリポイントは`mmq`。
- * **カタログ取得** (extras): プロバイダのモデルカタログ取得 — [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) を参照
+ * **カタログ取得** (extras): プロバイダのモデルカタログ取得 — [mmq/catalog/README.md](mmq/catalog/README.md) を参照
  * **無料プランに最適**: ドキュメント翻訳などの、専用のレート制限スタックを消費せずに約31秒間隔で待機できるジョブに適しています。
 
 ## 前提条件
@@ -130,7 +130,7 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | 429エラー時のバックオフ倍率 |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | ゾンビタスクタイムアウト（秒） |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | デフォルトモデル名 |
-| `MMQ_ENABLE_MCP` | オフ | MCPサーバーを有効化 — [docs/README_MCP.md](docs/README_MCP.md) を参照 |
+| `MMQ_ENABLE_MCP` | オフ | MCPサーバーを有効化 — [mmq/README_MCP.md](mmq/README_MCP.md) を参照 |
 | `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | カタログ取得ペーシング |
 | `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | カタログ取得最大バックオフ |
 | `MMQ_FAKE_API` | オフ | オフライン / e2e: フェイククライアント（`1`/`true`） |
@@ -214,12 +214,9 @@ python scripts/translate_readme.py --dry-run    # preview, no write
 
 ## その他のドキュメント
 
- * [docs/README_MCP.md](docs/README_MCP.md) — MCPサーバーのセットアップ
- * [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) — カタログ取得（extras）
+ * [mmq/README_MCP.md](mmq/README_MCP.md) — MCPサーバーのセットアップ
+ * [mmq/catalog/README.md](mmq/catalog/README.md) — カタログ取得（extras）
  * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Vibe / MCP手動テスト
- * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — ウェブ検索の位置付け（mmqベース外）
- * [docs/tasks.md](docs/tasks.md) — バックログ
- * [docs/NOTES.md](docs/NOTES.md) — 設計ノート
 
 ## ライセンス
 

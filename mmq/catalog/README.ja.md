@@ -1,4 +1,4 @@
-<!-- TODO: translate this file via scripts/translate_readme.py --include docs/README_extras_Catalog -->
+<!-- TODO: translate this file via scripts/translate_readme.py --include mmq/catalog -->
 
 # Catalog — mistral-managed-queue (extras)
 

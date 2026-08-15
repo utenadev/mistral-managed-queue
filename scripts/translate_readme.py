@@ -11,11 +11,11 @@ Usage (from repo root)::
     python scripts/translate_readme.py
 
     # Specific docs
-    python scripts/translate_readme.py --include docs/README_MCP
-    python scripts/translate_readme.py --include docs/README_extras_Catalog
+    python scripts/translate_readme.py --include mmq/README_MCP
+    python scripts/translate_readme.py --include mmq/catalog
 
     # Multiple docs
-    python scripts/translate_readme.py --include README --include docs/README_MCP
+    python scripts/translate_readme.py --include README --include mmq/README_MCP
 
     python scripts/translate_readme.py --lang ja
     python scripts/translate_readme.py --dry-run
@@ -45,8 +45,8 @@ LANGS = sorted(LANG_NAMES)
 # Default source files: name -> (src_path, output_dir, has_switcher)
 DEFAULT_INCLUDES = {
     "README": ("README.md", ROOT, True),
-    "docs/README_MCP": ("docs/README_MCP.md", ROOT / "docs", False),
-    "docs/README_extras_Catalog": ("docs/README_extras_Catalog.md", ROOT / "docs", False),
+    "mmq/README_MCP": ("mmq/README_MCP.md", ROOT / "mmq", False),
+    "mmq/catalog": ("mmq/catalog/README.md", ROOT / "mmq" / "catalog", False),
 }
 
 INLINE_CODE = re.compile(r'`[^`\n]+`')
@@ -77,9 +77,8 @@ def _locale_path(src_path: Path, lang: str, output_dir: Path) -> Path:
 
 
 def _build_switcher(src_path: Path) -> str | None:
-    """Build language switcher line for the main README, or None for other docs."""
-    name = src_path.stem  # "README"
-    if name != "README":
+    """Language switcher for the repo-root README only (not mmq/catalog/README)."""
+    if src_path.resolve() != (ROOT / "README.md").resolve():
         return None
     return "[English](README.md) | [日本語](README.ja.md) | [Français](README.fr.md)"
 

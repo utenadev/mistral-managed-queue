@@ -1,3 +1,5 @@
+<!-- TODO: translate this file via scripts/translate_readme.py --include mmq/README_MCP -->
+
 # MCP Server — mistral-managed-queue
 
 The MCP (Model Context Protocol) server exposes `ask_mistral` and `get_queue_status`
@@ -69,7 +71,7 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 }
 ```
 
-After changing config, restart the client. Manual Vibe checklist: [SMOKE_VIBE.md](SMOKE_VIBE.md).
+After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VIBE.md](../docs/SMOKE_VIBE.md).
 
 ## MCP Tools
 

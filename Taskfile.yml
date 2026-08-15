@@ -29,7 +29,7 @@ tasks:
       - >-
         uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
         --no-project python scripts/translate_readme.py --lang ja
-        --include README --include docs/README_MCP --include docs/README_extras_Catalog
+        --include README --include mmq/README_MCP --include mmq/catalog
 
   readme:translate:fr:
     desc: All registered English docs → fr only
@@ -37,10 +37,10 @@ tasks:
       - >-
         uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
         --no-project python scripts/translate_readme.py --lang fr
-        --include README --include docs/README_MCP --include docs/README_extras_Catalog
+        --include README --include mmq/README_MCP --include mmq/catalog
 
   # Registered English sources (pass --include explicitly so Taskfile matches the script):
-  # README.md, docs/README_MCP.md, docs/README_extras_Catalog.md
+  # README.md, mmq/README_MCP.md, mmq/catalog/README.md
   readme:translate:dry:
     desc: Dry-run translation (no write)
     cmds:

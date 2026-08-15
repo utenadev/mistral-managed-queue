@@ -1,4 +1,4 @@
-<!-- TODO: translate this file via scripts/translate_readme.py --include docs/README_MCP -->
+<!-- TODO: translate this file via scripts/translate_readme.py --include mmq/README_MCP -->
 
 # MCP Server — mistral-managed-queue
 
@@ -71,7 +71,7 @@ If `mmq` is already on `PATH` (venv / `uv pip install`):
 }
 ```
 
-After changing config, restart the client. Manual Vibe checklist: [SMOKE_VIBE.md](SMOKE_VIBE.md).
+After changing config, restart the client. Manual Vibe checklist: [docs/SMOKE_VIBE.md](../docs/SMOKE_VIBE.md).
 
 ## MCP Tools
 

@@ -34,8 +34,6 @@ only-include = [
     "docs/rate-limit.md",
     "docs/troubleshooting.md",
     "docs/examples.md",
-    "docs/README_MCP.md",
-    "docs/README_extras_Catalog.md",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -51,8 +49,6 @@ only-include = [
     "docs/rate-limit.md",
     "docs/troubleshooting.md",
     "docs/examples.md",
-    "docs/README_MCP.md",
-    "docs/README_extras_Catalog.md",
 ]
 
 [project.scripts]

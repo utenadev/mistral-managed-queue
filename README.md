@@ -17,7 +17,7 @@ It uses SQLite (WAL mode) and async queueing with a single in-flight task to spa
  * **Streaming & cancel handling**: Streams the Mistral API response internally (the tool returns the full text); on client cancel (`CancelledError`) updates task status in the DB.
  * **Local control DB**: Temp DB under a per-user directory with mode `0700` (path overridable via `MMQ_TEMP_DB_PATH`).
  * **PyPI / uvx**: Install once or run ephemerally; entry point is `mmq`.
- * **Catalog fetching** (extras): Fetch provider model catalogs — see [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md).
+ * **Catalog fetching** (extras): Fetch provider model catalogs — see [mmq/catalog/README.md](mmq/catalog/README.md).
  * **Good free-tier fit**: Occasional jobs (e.g. translating docs) that can wait ~31s between calls without burning a dedicated rate-limit stack.
 
 ## Prerequisites
@@ -125,8 +125,8 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | Backoff multiplier on 429 |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | Zombie task timeout (seconds) |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Default model name |
-| `MMQ_ENABLE_MCP` | off | Enable MCP server — see [docs/README_MCP.md](docs/README_MCP.md) |
-| `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | Catalog fetch pacing — see [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) |
+| `MMQ_ENABLE_MCP` | off | Enable MCP server — see [mmq/README_MCP.md](mmq/README_MCP.md) |
+| `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | Catalog fetch pacing — see [mmq/catalog/README.md](mmq/catalog/README.md) |
 | `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | Catalog fetch max backoff |
 | `MMQ_FAKE_API` | off | Offline / e2e: fake client (`1`/`true`) |
 | `MMQ_FAKE_RESPONSE` | — | Fixed fake response text (testing) |
@@ -177,7 +177,7 @@ Besides the CLI and MCP server, you can call the queue from Python. This repo sh
 | Shared DB | Does not bypass other free-tier clients on the machine |
 | Programmatic API | Uses `execute_mistral_queue_async` + `MistralRequest` |
 
-**Locales workflow:** edit the English sources (`README.md`, `docs/README_MCP.md`, `docs/README_extras_Catalog.md`); do not hand-maintain `*.ja.md` / `*.fr.md`.
+**Locales workflow:** edit the English sources (`README.md`, `mmq/README_MCP.md`, `mmq/catalog/README.md`); do not hand-maintain `*.ja.md` / `*.fr.md`.
 
 ```bash
 export MISTRAL_API_KEY=...
@@ -210,12 +210,9 @@ Thank you all!
 
 ## Further docs
 
- * [docs/README_MCP.md](docs/README_MCP.md) — MCP server setup and configuration
- * [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) — Catalog fetching (extras)
+ * [mmq/README_MCP.md](mmq/README_MCP.md) — MCP server setup and configuration
+ * [mmq/catalog/README.md](mmq/catalog/README.md) — Catalog fetching (extras)
  * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Vibe / MCP manual smoke
- * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — where web search belongs (outside mmq base)
- * [docs/tasks.md](docs/tasks.md) — backlog
- * [docs/NOTES.md](docs/NOTES.md) — design notes
 
 ## License
 

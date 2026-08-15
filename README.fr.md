@@ -57,7 +57,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 **Remarques :**
 
  * Le nom du script console est **`mmq`**. Incorrect : `uvx mistral-managed-queue ...`. Correct : `uvx --from mistral-managed-queue mmq ...`.
- * Dépendances de base : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. La récupération du catalogue nécessite `pip install mistral-managed-queue[catalog]`. Voir [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md).
+ * Dépendances de base : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. La récupération du catalogue nécessite `pip install mistral-managed-queue[catalog]`. Voir [mmq/catalog/README.md](mmq/catalog/README.md).
 
 ## Utilisation
 
@@ -132,7 +132,7 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | Multiplicateur de repli en cas de 429 |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | Délai d'expiration des tâches zombies (secondes) |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Nom du modèle par défaut |
-| `MMQ_ENABLE_MCP` | désactivé | Activer le serveur MCP — voir [docs/README_MCP.md](docs/README_MCP.md) |
+| `MMQ_ENABLE_MCP` | désactivé | Activer le serveur MCP — voir [mmq/README_MCP.md](mmq/README_MCP.md) |
 | `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | Rythme de récupération du catalogue |
 | `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | Repli maximal de récupération du catalogue |
 | `MMQ_FAKE_API` | désactivé | Hors ligne / e2e : client factice (`1`/`true`) |
@@ -216,12 +216,9 @@ Merci à tous !
 
 ## Documentation complémentaire
 
- * [docs/README_MCP.md](docs/README_MCP.md) — Configuration du serveur MCP
- * [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) — Récupération du catalogue (extras)
+ * [mmq/README_MCP.md](mmq/README_MCP.md) — Configuration du serveur MCP
+ * [mmq/catalog/README.md](mmq/catalog/README.md) — Récupération du catalogue (extras)
  * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Manuel de fumée Vibe / MCP
- * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — où se situe la recherche web (hors base mmq)
- * [docs/tasks.md](docs/tasks.md) — backlog
- * [docs/NOTES.md](docs/NOTES.md) — notes de conception
 
 ## Licence
 
