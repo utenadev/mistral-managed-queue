@@ -7,7 +7,7 @@
 CLIツールおよびMCP（Model Context Protocol）サーバーで、SQLite共有キューを介してMistral無料プラン（約30秒に1リクエスト）へのローカルおよびマルチプロセス/マルチクライアント呼び出しを調整します。
 SQLite（WALモード）と非同期キューイングを使用し、1つの進行中タスクでリクエスト開始を間隔を空けて実行します。これはベストエフォートのトラフィック制御であり、公式のSLAではありません。
 
-**パッケージ:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **コンソールスクリプト名:** `mmq`（パッケージ名ではない）· **現在のリリース:** `0.2.0`
+**パッケージ:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **コンソールスクリプト名:** `mmq`（パッケージ名ではない）· **現在のリリース:** `0.2.1`
 
 ## 機能
 
@@ -130,7 +130,7 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | 429エラー時のバックオフ倍率 |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | ゾンビタスクタイムアウト（秒） |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | デフォルトモデル名 |
-| `MMQ_ENABLE_MCP` | オフ | MCPサーバー / `mcp`サブコマンドを有効化（`1`/`true`） |
+| `MMQ_ENABLE_MCP` | オフ | MCPサーバーを有効化 — [docs/README_MCP.md](docs/README_MCP.md) を参照 |
 | `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | カタログ取得ペーシング |
 | `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | カタログ取得最大バックオフ |
 | `MMQ_FAKE_API` | オフ | オフライン / e2e: フェイククライアント（`1`/`true`） |
@@ -214,6 +214,8 @@ python scripts/translate_readme.py --dry-run    # preview, no write
 
 ## その他のドキュメント
 
+ * [docs/README_MCP.md](docs/README_MCP.md) — MCPサーバーのセットアップ
+ * [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) — カタログ取得（extras）
  * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Vibe / MCP手動テスト
  * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — ウェブ検索の位置付け（mmqベース外）
  * [docs/tasks.md](docs/tasks.md) — バックログ

@@ -24,22 +24,23 @@ tasks:
         --no-project python scripts/translate_readme.py
 
   readme:translate:ja:
-    desc: README.md → README.ja.md only
+    desc: All registered English docs → ja only
     cmds:
       - >-
         uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
         --no-project python scripts/translate_readme.py --lang ja
+        --include README --include docs/README_MCP --include docs/README_extras_Catalog
 
   readme:translate:fr:
-    desc: README.md → README.fr.md only
+    desc: All registered English docs → fr only
     cmds:
       - >-
         uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2'
         --no-project python scripts/translate_readme.py --lang fr
+        --include README --include docs/README_MCP --include docs/README_extras_Catalog
 
-  # The translate tasks now cover all registered docs:
+  # Registered English sources (pass --include explicitly so Taskfile matches the script):
   # README.md, docs/README_MCP.md, docs/README_extras_Catalog.md
-  # (controlled by --include flag in the script)
   readme:translate:dry:
     desc: Dry-run translation (no write)
     cmds:
@@ -77,10 +78,19 @@ tasks:
     cmds:
       - git push origin HEAD
 
-  push:tags:
-    desc: git push origin --tags only
+  push:release:
+    desc: Push tags and create a GitHub Release (gh release create)
     cmds:
       - git push origin --tags
+      - |
+        set -euo pipefail
+        TAG="${TAG:-$(git describe --tags --abbrev=0)}"
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          echo "GitHub release ${TAG} already exists:"
+          gh release view "$TAG" --json url -q .url
+        else
+          gh release create "$TAG" --title "$TAG" --generate-notes
+        fi
 
   # --- PyPI ---
 

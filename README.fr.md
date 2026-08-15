@@ -7,7 +7,7 @@
 Un outil CLI et un serveur MCP (Model Context Protocol) qui coordonne les appels locaux et multi-processus/multi-clients à l'offre gratuite de Mistral (~1 requête / 30 secondes) via une file d'attente partagée SQLite.
 Il utilise SQLite (mode WAL) et une file d'attente asynchrone avec une seule tâche en vol pour espacer les débuts de requêtes. Il s'agit d'un contrôle de trafic au mieux, et non d'un SLA officiel.
 
-**Package :** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) sur PyPI · **script console :** `mmq` (pas le nom du package) · **version actuelle :** `0.2.0`
+**Package :** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) sur PyPI · **script console :** `mmq` (pas le nom du package) · **version actuelle :** `0.2.1`
 
 ## Fonctionnalités
 
@@ -57,7 +57,7 @@ uvx --from mistral-managed-queue mmq ask "Reply with pong only."
 **Remarques :**
 
  * Le nom du script console est **`mmq`**. Incorrect : `uvx mistral-managed-queue ...`. Correct : `uvx --from mistral-managed-queue mmq ...`.
- * Dépendances de base : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. La récupération du catalogue nécessite `pip install mistral-managed-queue[catalog]` est nécessaire.
+ * Dépendances de base : `mcp[cli]>=1.0.0,<2`, `mistralai>=1.0.0,<2`. La récupération du catalogue nécessite `pip install mistral-managed-queue[catalog]`. Voir [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md).
 
 ## Utilisation
 
@@ -132,7 +132,7 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | Multiplicateur de repli en cas de 429 |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | Délai d'expiration des tâches zombies (secondes) |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Nom du modèle par défaut |
-| `MMQ_ENABLE_MCP` | désactivé | Activer le serveur MCP / sous-commandes `mcp` (`1`/`true`) |
+| `MMQ_ENABLE_MCP` | désactivé | Activer le serveur MCP — voir [docs/README_MCP.md](docs/README_MCP.md) |
 | `MMQ_CATALOG_BASE_WAIT_TIME` | `MMQ_BASE_WAIT_TIME` | Rythme de récupération du catalogue |
 | `MMQ_CATALOG_MAX_WAIT_TIME` | `MMQ_MAX_WAIT_TIME` | Repli maximal de récupération du catalogue |
 | `MMQ_FAKE_API` | désactivé | Hors ligne / e2e : client factice (`1`/`true`) |
@@ -216,6 +216,8 @@ Merci à tous !
 
 ## Documentation complémentaire
 
+ * [docs/README_MCP.md](docs/README_MCP.md) — Configuration du serveur MCP
+ * [docs/README_extras_Catalog.md](docs/README_extras_Catalog.md) — Récupération du catalogue (extras)
  * [docs/SMOKE_VIBE.md](docs/SMOKE_VIBE.md) — Manuel de fumée Vibe / MCP
  * [docs/SEARCH_POSITIONING.md](docs/SEARCH_POSITIONING.md) — où se situe la recherche web (hors base mmq)
  * [docs/tasks.md](docs/tasks.md) — backlog

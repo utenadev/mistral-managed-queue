@@ -24,7 +24,7 @@ rate limiting (free-tier ~1 req/30s) via SQLite (WAL mode). Package layout under
 - `mmq/catalog/` — ORR-compatible catalog fetch/validate/write (`fetch.py`, `validate.py`,
   `write.py`, `types.py`). `write_catalog_yaml(path, document)` (order matters).
 - `mmq/__init__.py` — `__version__` + re-exports. **Version is kept in sync with
-  `pyproject.toml`** (currently `0.2.0`).
+  `pyproject.toml`** (currently `0.2.1`).
 
 ## Key Concepts
 

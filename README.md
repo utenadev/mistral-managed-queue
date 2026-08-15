@@ -7,7 +7,7 @@
 A CLI tool and MCP (Model Context Protocol) server that coordinates local and multi-process / multi-client calls to the Mistral free tier (~1 request / 30 seconds) via a shared SQLite queue.
 It uses SQLite (WAL mode) and async queueing with a single in-flight task to space request starts. This is best-effort traffic control, not an official SLA.
 
-**Package:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.2.0`
+**Package:** [`mistral-managed-queue`](https://pypi.org/project/mistral-managed-queue/) on PyPI · **console script:** `mmq` (not the package name) · **current release:** `0.2.1`
 
 ## Features
 
@@ -177,15 +177,15 @@ Besides the CLI and MCP server, you can call the queue from Python. This repo sh
 | Shared DB | Does not bypass other free-tier clients on the machine |
 | Programmatic API | Uses `execute_mistral_queue_async` + `MistralRequest` |
 
-**Locales workflow:** edit **`README.md` (English) only**; do not hand-maintain `README.ja.md` / `README.fr.md`.
+**Locales workflow:** edit the English sources (`README.md`, `docs/README_MCP.md`, `docs/README_extras_Catalog.md`); do not hand-maintain `*.ja.md` / `*.fr.md`.
 
 ```bash
 export MISTRAL_API_KEY=...
 # optional: TRANSLATE_MODEL=mistral-small-latest
 
 # From a git checkout (imports the mmq package on PYTHONPATH via the script)
-python scripts/translate_readme.py              # → README.ja.md + README.fr.md
-python scripts/translate_readme.py --lang ja    # one language
+python scripts/translate_readme.py              # all registered docs × ja + fr
+python scripts/translate_readme.py --include README --lang ja
 python scripts/translate_readme.py --dry-run    # preview, no write
 ```
 

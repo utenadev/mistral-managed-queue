@@ -7,7 +7,7 @@ fenced code blocks and inline code.
 Usage (from repo root)::
 
     export MISTRAL_API_KEY=...
-    # Default: main README
+    # Default: all registered English sources (README + MCP + Catalog) × ja + fr
     python scripts/translate_readme.py
 
     # Specific docs
@@ -16,9 +16,6 @@ Usage (from repo root)::
 
     # Multiple docs
     python scripts/translate_readme.py --include README --include docs/README_MCP
-
-    # Custom source / output dir
-    python scripts/translate_readme.py --src docs/README_MCP.md --output-dir docs/
 
     python scripts/translate_readme.py --lang ja
     python scripts/translate_readme.py --dry-run
@@ -42,7 +39,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-LOCALE_DIR = ROOT
 LANG_NAMES = {"ja": "Japanese", "fr": "French"}
 LANGS = sorted(LANG_NAMES)
 
@@ -54,7 +50,7 @@ DEFAULT_INCLUDES = {
 }
 
 INLINE_CODE = re.compile(r'`[^`\n]+`')
-BLOCK_TOKEN = re.compile(r"<!-- MMQ_BLOCK_(d+) -->")
+BLOCK_TOKEN = re.compile(r"<!-- MMQ_BLOCK_(\d+) -->")
 PLACEHOLDER = "<!-- MMQ_BLOCK_{i} -->"
 
 SYSTEM = ("""You translate technical README markdown for a software project.
@@ -68,14 +64,6 @@ Rules:
 - Do not add a preamble or explanation. Output markdown only.
 - Leave the product name "mistral-managed-queue" and command "mmq" unchanged.
 """)
-
-
-def _src_path(src_arg: str, output_dir: Path) -> Path:
-    """Resolve source path from argument."""
-    p = Path(src_arg)
-    if p.is_absolute():
-        return p
-    return (output_dir / p).resolve() if output_dir else (ROOT / p).resolve()
 
 
 def _locale_path(src_path: Path, lang: str, output_dir: Path) -> Path:
