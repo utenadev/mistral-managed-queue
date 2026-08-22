@@ -32,6 +32,8 @@ When rate limit errors (HTTP 429) are detected:
 | `MMQ_MAX_WAIT_TIME` | 300.0 | Maximum wait time cap |
 | `MMQ_BACKOFF_MULTIPLIER` | 2.0 | Multiplier for exponential backoff |
 | `MMQ_MIN_SLEEP_INTERVAL` | 2.0 | Minimum sleep between retries |
+| `MMQ_RANDOM_INTERVAL` | off | Randomize the base interval uniformly in `[BASE_WAIT_TIME, RANDOM_INTERVAL_MAX]` |
+| `MMQ_RANDOM_INTERVAL_MAX` | 50.0 | Upper bound of the randomized base interval |
 
 ### Adjusting for Different Tiers
 
@@ -47,6 +49,13 @@ export MMQ_MAX_WAIT_TIME=300.0
 # Adjust for higher rate limits
 export MMQ_BASE_WAIT_TIME=5.0
 export MMQ_MAX_WAIT_TIME=60.0
+```
+
+#### Humanized Pacing (Free Tier)
+```bash
+# Draw each base interval uniformly from 31-50s instead of a fixed 31s
+export MMQ_RANDOM_INTERVAL=1
+export MMQ_RANDOM_INTERVAL_MAX=50.0
 ```
 
 ## Queue Behavior

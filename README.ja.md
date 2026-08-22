@@ -128,6 +128,8 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_MAX_WAIT_TIME` | `300` | 最大バックオフ待機時間 |
 | `MMQ_MIN_SLEEP_INTERVAL` | `2` | リトライ間の最小スリープ時間 |
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | 429エラー時のバックオフ倍率 |
+| `MMQ_RANDOM_INTERVAL` | オフ | ベース待機時間をランダム化（`1`/`true`）— 下記参照 |
+| `MMQ_RANDOM_INTERVAL_MAX` | `50` | ランダム化待機時間の上限 |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | ゾンビタスクタイムアウト（秒） |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | デフォルトモデル名 |
 | `MMQ_ENABLE_MCP` | オフ | MCPサーバーを有効化 — [mmq/README_MCP.md](mmq/README_MCP.md) を参照 |
@@ -136,6 +138,11 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_FAKE_API` | オフ | オフライン / e2e: フェイククライアント（`1`/`true`） |
 | `MMQ_FAKE_RESPONSE` | — | 固定フェイクレスポンストext（テスト用） |
 | `MMQ_FAKE_FAIL` | — | `429`または`error`で障害をシミュレート（テスト用） |
+
+`MMQ_RANDOM_INTERVAL=1` を設定すると、API呼び出し間のベース待機時間が
+ゲートのリセット時に `[MMQ_BASE_WAIT_TIME, MMQ_RANDOM_INTERVAL_MAX]`
+（デフォルト31〜50秒）の一様分布から描画され、リクエスト間隔が機械的で
+なく見えます。429バックオフには影響しません。
 
 ## 制御データの保存場所
 

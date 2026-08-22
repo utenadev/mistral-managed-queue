@@ -82,6 +82,8 @@ uvx mistral-managed-queue --mcp
 | `MMQ_BASE_WAIT_TIME` | 31.0 | Base wait time between API calls |
 | `MMQ_MAX_WAIT_TIME` | 300.0 | Maximum wait time |
 | `MMQ_BACKOFF_MULTIPLIER` | 2.0 | Exponential backoff multiplier |
+| `MMQ_RANDOM_INTERVAL` | `false` | Randomize base wait between API calls |
+| `MMQ_RANDOM_INTERVAL_MAX` | 50.0 | Upper bound of randomized wait |
 | `MMQ_FAKE_API` | `false` | Enable fake API for testing |
 
 AI Agent Guidance: Use the MCP tools (`ask_mistral`, `get_queue_status`) for programmatic access.

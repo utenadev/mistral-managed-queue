@@ -76,9 +76,11 @@ from mmq.db import (
     get_secure_temp_db_path,
     get_task,
     init_db,
+    next_base_wait_time,
     purge_tasks,
     read_queue_status,
     register_task,
+    reset_rate_limit_wait_time,
     touch_task,
     update_task_status,
 )
@@ -573,6 +575,41 @@ class TestConstants:
         """Test model constants."""
         assert DEFAULT_MODEL == "mistral-small-latest"
         assert "helpful" in DEFAULT_SYSTEM_PROMPT.lower()
+
+class TestRandomInterval:
+    """Tests for MMQ_RANDOM_INTERVAL randomized base wait mode."""
+
+    def test_disabled_returns_fixed_base(self, monkeypatch):
+        """With the mode off, the base interval is exactly BASE_WAIT_TIME."""
+        monkeypatch.setattr("mmq.db.RANDOM_INTERVAL", False)
+        assert next_base_wait_time() == BASE_WAIT_TIME
+
+    def test_enabled_draws_uniformly_in_range(self, monkeypatch):
+        """With the mode on, draws stay within [BASE_WAIT_TIME, max] and vary."""
+        monkeypatch.setattr("mmq.db.RANDOM_INTERVAL", True)
+        samples = [next_base_wait_time() for _ in range(200)]
+        assert all(BASE_WAIT_TIME <= s <= 50.0 for s in samples)
+        assert len(set(samples)) > 1
+
+    def test_enabled_respects_custom_max(self, monkeypatch):
+        """A custom MMQ_RANDOM_INTERVAL_MAX caps the upper bound."""
+        monkeypatch.setattr("mmq.db.RANDOM_INTERVAL", True)
+        monkeypatch.setattr("mmq.db.RANDOM_INTERVAL_MAX", 40.0)
+        samples = [next_base_wait_time() for _ in range(100)]
+        assert all(31.0 <= s <= 40.0 for s in samples)
+
+    def test_max_below_min_is_clamped(self, monkeypatch):
+        """A max lower than BASE_WAIT_TIME degenerates to the min bound."""
+        monkeypatch.setattr("mmq.db.RANDOM_INTERVAL", True)
+        monkeypatch.setattr("mmq.db.RANDOM_INTERVAL_MAX", 10.0)
+        assert next_base_wait_time() == BASE_WAIT_TIME
+
+    def test_reset_stores_randomized_interval(self, monkeypatch, mock_db_path):
+        """reset_rate_limit_wait_time persists a value within the range."""
+        monkeypatch.setattr("mmq.db.RANDOM_INTERVAL", True)
+        reset_rate_limit_wait_time()
+        stored = read_queue_status()["current_wait_interval"]
+        assert BASE_WAIT_TIME <= stored <= 50.0
 
 
 # =============================================================================

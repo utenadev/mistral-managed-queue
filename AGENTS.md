@@ -93,6 +93,8 @@ uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
 | `MMQ_TEMP_DB_PATH` | per-user tempdir | Override DB path (for test isolation) |
 | `MMQ_BASE_WAIT_TIME` | `31` | Seconds between request starts |
 | `MMQ_MAX_WAIT_TIME` | `300` | Max backoff wait |
+| `MMQ_RANDOM_INTERVAL` | off | Randomize base wait in `[BASE_WAIT_TIME, MMQ_RANDOM_INTERVAL_MAX]` |
+| `MMQ_RANDOM_INTERVAL_MAX` | `50` | Upper bound of randomized wait |
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | Backoff multiplier on 429 |
 | `MMQ_MIN_SLEEP_INTERVAL` | `2.0` | Min poll/sleep granularity |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | Zombie task timeout |
@@ -132,7 +134,7 @@ uv run --with 'mcp[cli]>=1.0.0,<2' --with 'mistralai>=1.0.0,<2' \
 <claude-mem-context>
 # Memory Context
 
-# [mistral-managed-queue] recent context, 2026-08-13 10:28pm GMT+9
+# [mistral-managed-queue] recent context, 2026-08-15 10:13am GMT+9
 
 No previous sessions found.
 </claude-mem-context>

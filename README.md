@@ -123,6 +123,8 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_MAX_WAIT_TIME` | `300` | Max backoff wait |
 | `MMQ_MIN_SLEEP_INTERVAL` | `2` | Min sleep between retries |
 | `MMQ_BACKOFF_MULTIPLIER` | `2.0` | Backoff multiplier on 429 |
+| `MMQ_RANDOM_INTERVAL` | off | Randomize base wait (`1`/`true`) — see below |
+| `MMQ_RANDOM_INTERVAL_MAX` | `50` | Upper bound of randomized wait |
 | `MMQ_PROCESSING_TIMEOUT` | `120` | Zombie task timeout (seconds) |
 | `MMQ_DEFAULT_MODEL` | `mistral-small-latest` | Default model name |
 | `MMQ_ENABLE_MCP` | off | Enable MCP server — see [mmq/README_MCP.md](mmq/README_MCP.md) |
@@ -131,6 +133,11 @@ mmq purge --id 42     # delete a specific task by ID
 | `MMQ_FAKE_API` | off | Offline / e2e: fake client (`1`/`true`) |
 | `MMQ_FAKE_RESPONSE` | — | Fixed fake response text (testing) |
 | `MMQ_FAKE_FAIL` | — | `429` or `error` to simulate failure (testing) |
+
+With `MMQ_RANDOM_INTERVAL=1`, the base interval between API calls is drawn
+uniformly from `[MMQ_BASE_WAIT_TIME, MMQ_RANDOM_INTERVAL_MAX]` (default
+31–50 s) each time the gate resets, so the request cadence looks less
+machine-like. 429 backoff is unaffected.
 
 
 ## Control data location

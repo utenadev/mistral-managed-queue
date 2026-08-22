@@ -6,6 +6,7 @@ SQLite >= 3.35, e.g. Python 3.10+ standard builds) so a claim is a single
 atomic statement with no UPDATE-then-SELECT window.
 """
 
+import random
 import os
 import sqlite3
 import tempfile
@@ -22,6 +23,8 @@ from .config import (
     PROCESSING_TIMEOUT,
     DB_CONNECT_TIMEOUT,
     DB_SHORT_TIMEOUT,
+    RANDOM_INTERVAL,
+    RANDOM_INTERVAL_MAX,
 )
 
 logger = logging.getLogger("mistral-managed-queue")
@@ -51,6 +54,23 @@ def get_secure_temp_db_path() -> str:
     return os.path.join(base_dir, "mistral_managed_flow_control.db")
 
 TEMP_DB_PATH = get_secure_temp_db_path()
+
+
+def next_base_wait_time() -> float:
+    """Base wait time for the next rate-limit slot.
+
+    With ``MMQ_RANDOM_INTERVAL`` enabled, draw a uniform sample from
+    ``[BASE_WAIT_TIME, RANDOM_INTERVAL_MAX]`` so the request cadence is not
+    metronomic; otherwise return the fixed ``BASE_WAIT_TIME``.
+
+    ``RANDOM_INTERVAL_MAX`` below ``BASE_WAIT_TIME`` degenerates to the
+    fixed base, so the free-tier floor is never violated.
+    """
+    if not RANDOM_INTERVAL:
+        return BASE_WAIT_TIME
+    lo = float(BASE_WAIT_TIME)
+    hi = max(lo, float(RANDOM_INTERVAL_MAX))
+    return random.uniform(lo, hi)
 
 def init_db() -> None:
     """Initialize the temporary management database structure."""
@@ -89,7 +109,7 @@ def init_db() -> None:
             )
             cursor.execute(
                 "INSERT OR IGNORE INTO api_log (id, last_executed_at, current_wait_time) VALUES (1, 0.0, ?)",
-                (BASE_WAIT_TIME,),
+                (next_base_wait_time(),),
             )
             conn.commit()
     except Exception as e:
@@ -271,7 +291,7 @@ def wait_for_rate_limit() -> tuple[bool, float, float]:
             )
             row = cursor.fetchone()
             last_exec = row[0] if row else 0.0
-            wait_time = row[1] if row else BASE_WAIT_TIME
+            wait_time = row[1] if row else next_base_wait_time()
 
             elapsed = time.time() - last_exec
             if elapsed >= wait_time:
@@ -323,8 +343,9 @@ def update_rate_limit_wait_time(
 
 
 def reset_rate_limit_wait_time() -> None:
-    """Reset the shared wait time to ``BASE_WAIT_TIME``."""
-    update_rate_limit_wait_time(BASE_WAIT_TIME)
+    """Reset the shared wait time to the base interval (randomized when
+    ``MMQ_RANDOM_INTERVAL`` is enabled)."""
+    update_rate_limit_wait_time(next_base_wait_time())
 
 
 def read_queue_status() -> dict:
@@ -342,7 +363,7 @@ def read_queue_status() -> dict:
         )
         row = cursor.fetchone()
         last_exec = float(row[0]) if row else 0.0
-        wait_time = float(row[1]) if row else BASE_WAIT_TIME
+        wait_time = float(row[1]) if row else next_base_wait_time()
 
     elapsed = now - last_exec
     seconds_until = max(0.0, wait_time - elapsed)
