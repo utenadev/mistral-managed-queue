@@ -17,6 +17,15 @@ from mmq.catalog.types import (
     ProviderPluginMeta,
 )
 
+# Rate limiting for catalog fetching. Separate from the chat API rate
+# limiting; can be tuned via MMQ_CATALOG_BASE_WAIT_TIME (falls back to
+# MMQ_BASE_WAIT_TIME). Single source of truth: mmq/catalog/fetch.py imports
+# this constant instead of re-parsing the environment.
+CATALOG_BASE_WAIT_TIME = float(os.environ.get(
+    "MMQ_CATALOG_BASE_WAIT_TIME",
+    os.environ.get("MMQ_BASE_WAIT_TIME", "31.0")
+))  # free tier ~1 req/30s
+
 
 @runtime_checkable
 class ProviderPlugin(Protocol):
@@ -115,12 +124,6 @@ class BaseProviderPlugin(ABC):
     Subclasses should override the abstract methods.
     """
     
-    # Rate limiting constants for catalog fetching
-    # Separate from chat API rate limiting; can be tuned via MMQ_CATALOG_* env vars
-    CATALOG_BASE_WAIT_TIME = float(os.environ.get(
-        "MMQ_CATALOG_BASE_WAIT_TIME",
-        os.environ.get("MMQ_BASE_WAIT_TIME", "31.0")
-    ))
     
     def __init__(self, use_rate_gate: bool = True):
         """Initialize the plugin.
@@ -142,8 +145,8 @@ class BaseProviderPlugin(ABC):
             return
         
         elapsed = time.time() - self._last_request_time
-        if elapsed < self.CATALOG_BASE_WAIT_TIME:
-            wait_time = self.CATALOG_BASE_WAIT_TIME - elapsed
+        if elapsed < CATALOG_BASE_WAIT_TIME:
+            wait_time = CATALOG_BASE_WAIT_TIME - elapsed
             time.sleep(wait_time)
         
         self._last_request_time = time.time()

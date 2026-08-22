@@ -6,6 +6,7 @@ SQLite >= 3.35, e.g. Python 3.10+ standard builds) so a claim is a single
 atomic statement with no UPDATE-then-SELECT window.
 """
 
+import contextlib
 import random
 import os
 import sqlite3
@@ -55,6 +56,33 @@ def get_secure_temp_db_path() -> str:
 
 TEMP_DB_PATH = get_secure_temp_db_path()
 
+@contextlib.contextmanager
+def _connect(*, short: bool = False, autocommit: bool = False):
+    """Open the shared queue DB; always close on exit.
+
+    Args:
+        short: Use ``DB_SHORT_TIMEOUT`` instead of ``DB_CONNECT_TIMEOUT``
+            (for writes that must not block long on a busy DB).
+        autocommit: Disable implicit transactions (for explicit
+            ``BEGIN IMMEDIATE`` locking, e.g. the rate gate).
+    """
+    timeout = DB_SHORT_TIMEOUT if short else DB_CONNECT_TIMEOUT
+    conn = sqlite3.connect(
+        TEMP_DB_PATH,
+        timeout=timeout,
+        isolation_level=None if autocommit else "DEFERRED",
+    )
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+_CLAIM_COLUMNS = ("id", "prompt", "model", "system_prompt", "priority")
+
+def _claimed_task(row) -> dict:
+    """Map a claimed task row (ordered per ``_CLAIM_COLUMNS``) to a dict."""
+    return dict(zip(_CLAIM_COLUMNS, row))
+
 
 def next_base_wait_time() -> float:
     """Base wait time for the next rate-limit slot.
@@ -75,7 +103,7 @@ def next_base_wait_time() -> float:
 def init_db() -> None:
     """Initialize the temporary management database structure."""
     try:
-        with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+        with _connect() as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL;")
             cursor.execute("PRAGMA synchronous=NORMAL;")
@@ -120,7 +148,7 @@ def clean_zombie_tasks() -> None:
     """Mark timed-out processing tasks as failed; prune old failed tasks."""
     init_db()
     now = time.time()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -149,7 +177,7 @@ def register_task(
 ) -> int:
     """Register a new task and return its task ID."""
     init_db()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -178,7 +206,7 @@ def claim_task(task_id: int) -> Optional[dict]:
     """
     init_db()
     now = time.time()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -193,13 +221,7 @@ def claim_task(task_id: int) -> Optional[dict]:
         conn.commit()
         if row is None:
             return None
-        return {
-            "id": row[0],
-            "prompt": row[1],
-            "model": row[2],
-            "system_prompt": row[3],
-            "priority": row[4],
-        }
+        return _claimed_task(row)
 
 def claim_next_task() -> Optional[dict]:
     """Atomically claim the highest-priority pending task (or None).
@@ -214,7 +236,7 @@ def claim_next_task() -> Optional[dict]:
     """
     init_db()
     now = time.time()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -234,18 +256,12 @@ def claim_next_task() -> Optional[dict]:
         conn.commit()
         if row is None:
             return None
-        return {
-            "id": row[0],
-            "prompt": row[1],
-            "model": row[2],
-            "system_prompt": row[3],
-            "priority": row[4],
-        }
+        return _claimed_task(row)
 
 def get_task(task_id: int) -> Optional[dict]:
     """Return a full task row (including status/result/error) or None."""
     init_db()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(
@@ -261,7 +277,7 @@ def get_task(task_id: int) -> Optional[dict]:
 def touch_task(task_id: int) -> None:
     """Refresh the task's updated_at timestamp."""
     init_db()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -280,9 +296,7 @@ def wait_for_rate_limit() -> tuple[bool, float, float]:
     gate's ``last_executed_at`` is stamped to ``now`` for all processes.
     """
     init_db()
-    with sqlite3.connect(
-        TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT, isolation_level=None
-    ) as conn:
+    with _connect(autocommit=True) as conn:
         cursor = conn.cursor()
         cursor.execute("BEGIN IMMEDIATE")
         try:
@@ -327,7 +341,7 @@ def update_rate_limit_wait_time(
         MIN_SLEEP_INTERVAL, min(new_wait_time, MAX_WAIT_TIME)
     )
     init_db()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_SHORT_TIMEOUT) as conn:
+    with _connect(short=True) as conn:
         cursor = conn.cursor()
         if stamp_executed:
             cursor.execute(
@@ -352,7 +366,7 @@ def read_queue_status() -> dict:
     """Return queue status including the shared rate-limit gate state."""
     init_db()
     now = time.time()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT status, COUNT(*) FROM tasks GROUP BY status"
@@ -382,7 +396,7 @@ def read_queue_status() -> dict:
 def update_task_status(task_id: int, status: str, result: Optional[str] = None, error: Optional[str] = None) -> None:
     """Update a task's status, result, and error."""
     init_db()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -397,7 +411,7 @@ def update_task_status(task_id: int, status: str, result: Optional[str] = None, 
 def purge_tasks(*, pending: bool = False, all: bool = False, task_id: Optional[int] = None) -> int:
     """Delete tasks. Exactly one of pending/all/task_id must be specified."""
     init_db()
-    with sqlite3.connect(TEMP_DB_PATH, timeout=DB_CONNECT_TIMEOUT) as conn:
+    with _connect() as conn:
         cursor = conn.cursor()
         if all:
             cursor.execute("DELETE FROM tasks")

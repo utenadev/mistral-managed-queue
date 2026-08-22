@@ -19,7 +19,7 @@ from mmq.catalog.adapters import (
     NvidiaNimPlugin,
     MistralPlugin,
 )
-from mmq.catalog.adapters.base import ProviderPlugin
+from mmq.catalog.adapters.base import ProviderPlugin, CATALOG_BASE_WAIT_TIME
 from mmq.catalog.types import (
     CatalogDocument,
     FORBIDDEN_AUTH_KEYS,
@@ -34,16 +34,6 @@ from mmq.catalog.types import (
 )
 from mmq.catalog.validate import validate_catalog
 
-# Rate limiting constants for catalog fetching
-# Separate from chat API rate limiting; can be tuned via MMQ_CATALOG_* env vars
-CATALOG_BASE_WAIT_TIME = float(os.environ.get(
-    "MMQ_CATALOG_BASE_WAIT_TIME",
-    os.environ.get("MMQ_BASE_WAIT_TIME", "31.0")
-))  # free tier ~1 req/30s
-CATALOG_MAX_WAIT_TIME = float(os.environ.get(
-    "MMQ_CATALOG_MAX_WAIT_TIME",
-    os.environ.get("MMQ_MAX_WAIT_TIME", "300.0")
-))
 
 
 def _get_timestamp() -> str:
